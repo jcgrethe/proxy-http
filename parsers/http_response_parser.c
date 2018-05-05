@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "include/http_parser.h"
+#include "http_response_parser.h"
 
 #define BUFFER_SIZE 256
 #define CRLF "\r\n"
@@ -28,13 +28,13 @@ static char *concat(const char *s1, const char *s2)
     return result;
 }
 
-int status_code(struct http_parser *p, char *stat)
+int status_code(struct http_response_parser *p, char *stat)
 {
     strcpy(p->response->status, stat);
     return 1;
 }
 
-int protocol_version(struct http_parser *p, char *s)
+int protocol_version(struct http_response_parser *p, char *s)
 {
     int len = sizeof(protocol_versions) / sizeof(protocol_versions[0]);
     int i;
@@ -59,9 +59,9 @@ int protocol_version(struct http_parser *p, char *s)
     return 1;
 }
 
-struct http_parser *http_parser_init()
+struct http_response_parser *http_parser_init()
 {
-    struct http_parser *parser = malloc(sizeof(struct http_parser));
+    struct http_response_parser *parser = malloc(sizeof(struct http_response_parser));
     if (parser == NULL)
     {
         fprintf(stderr, "Not enough memory\n");
@@ -128,7 +128,7 @@ void free_header_fields_of_map(map_str_t map)
     }
 }
 
-void http_parser_free(struct http_parser *parser)
+void http_parser_free(struct http_response_parser *parser)
 {
 
     if (parser != NULL)
@@ -147,7 +147,7 @@ void http_parser_free(struct http_parser *parser)
     }
 }
 
-int http_parser_parse(struct http_parser *parser, FILE *fp)
+int http_parser_parse(struct http_response_parser *parser, FILE *fp)
 {
 
     char buf[BUFFER_SIZE] = "";
@@ -179,7 +179,7 @@ int http_parser_parse(struct http_parser *parser, FILE *fp)
     return 0;
 }
 
-int http_parser_feed_line(struct http_parser *parser, char *line, FILE *fp)
+int http_parser_feed_line(struct http_response_parser *parser, char *line, FILE *fp)
 {
     int error;
 
@@ -251,7 +251,7 @@ int http_parser_feed_line(struct http_parser *parser, char *line, FILE *fp)
     return 0;
 }
 
-int http_parser_feed_response_line(struct http_parser *parser, char *line)
+int http_parser_feed_response_line(struct http_response_parser *parser, char *line)
 {
 
     char buf[BUFFER_SIZE] = "";
@@ -320,7 +320,7 @@ int http_parser_feed_response_line(struct http_parser *parser, char *line)
     return 0;
 }
 
-int http_parser_feed_header_fields(struct http_parser *parser, char *line)
+int http_parser_feed_header_fields(struct http_response_parser *parser, char *line)
 {
 
     int error;
@@ -377,7 +377,7 @@ int http_parser_feed_header_fields(struct http_parser *parser, char *line)
     return 0;
 }
 
-int http_parser_feed_body(struct http_parser *parser, char *line, FILE *fp)
+int http_parser_feed_body(struct http_response_parser *parser, char *line, FILE *fp)
 {
 
     char **encoding = map_get(&parser->response->header_map, "Transfer-Encoding");
@@ -418,7 +418,7 @@ int http_parser_feed_body(struct http_parser *parser, char *line, FILE *fp)
     return 0;
 }
 
-int http_parser_decode_chunked(struct http_parser *parser, char *line, FILE *fp)
+int http_parser_decode_chunked(struct http_response_parser *parser, char *line, FILE *fp)
 {
     size_t chunk_size = 0;
 
@@ -523,7 +523,7 @@ const char *parse_error(enum parser_state state)
     return error_message;
 }
 
-void http_parser_print_information(struct http_parser *parser)
+void http_parser_print_information(struct http_response_parser *parser)
 {
     printf("%s", parser->response->body);
 }

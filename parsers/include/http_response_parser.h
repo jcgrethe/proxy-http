@@ -47,25 +47,25 @@ enum parser_state
     parser_error_chunk_decode_failed
 };
 
-struct http_parser
+struct http_response_parser
 {
     enum parser_state state;
     struct http_response *response;
 };
 
 /** parse functions **/
-int status_code(struct http_parser *p, char *stat);
+int status_code(struct http_response_parser *p, char *stat);
 
-int protocol_version(struct http_parser *p, char *s);
+int protocol_version(struct http_response_parser *p, char *s);
 
 /** initialize parser **/
-struct http_parser *http_parser_init(void);
+struct http_response_parser *http_parser_init(void);
 
 /** free header field value from map **/
 void free_header_fields_of_map(map_str_t map);
 
 /** free parser **/
-void http_parser_free(struct http_parser *parser);
+void http_parser_free(struct http_response_parser *parser);
 
 /** The normal procedure for parsing an HTTP message is to read the
    start-line into a structure, read each header field into a hash table
@@ -73,26 +73,26 @@ void http_parser_free(struct http_parser *parser);
    determine if a message body is expected.  If a message body has been
    indicated, then it is read as a stream until an amount of octets
    equal to the message body length is read or the connection is closed.  */
-int http_parser_parse(struct http_parser *parser, FILE *fp);
+int http_parser_parse(struct http_response_parser *parser, FILE *fp);
 
-int http_parser_feed_line(struct http_parser *parser, char *line, FILE *fp);
+int http_parser_feed_line(struct http_response_parser *parser, char *line, FILE *fp);
 
 /** feed a request line  */
-int http_parser_feed_response_line(struct http_parser *parser, char *line);
+int http_parser_feed_response_line(struct http_response_parser *parser, char *line);
 
 /** feed header fields by line **/
-int http_parser_feed_header_fields(struct http_parser *parser, char *line);
+int http_parser_feed_header_fields(struct http_response_parser *parser, char *line);
 
 /** feed message body by line **/
-int http_parser_feed_body(struct http_parser *parser, char *line, FILE *fp);
+int http_parser_feed_body(struct http_response_parser *parser, char *line, FILE *fp);
 
 /** decode chunked transfer enconding without trailer part **/
-int http_parser_decode_chunked(struct http_parser *parser, char *line, FILE *fp);
+int http_parser_decode_chunked(struct http_response_parser *parser, char *line, FILE *fp);
 
 /** get error message from enum parser_state **/
 const char *parse_error(enum parser_state state);
 
 /** print parser information **/
-void http_parser_print_information(struct http_parser *parser);
+void http_parser_print_information(struct http_response_parser *parser);
 
 #endif

@@ -7,7 +7,7 @@
 #include <errno.h>
 #include <sys/select.h>
 #include <assert.h>
-#include "buffer.h"
+#include "include/buffer.h"
 
 static int pipeToChild[2] = {-1, -1};
 static int pipeFromChild[2] = {-1, -1};

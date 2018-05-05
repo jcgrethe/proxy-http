@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#include "../map-master/src/map.h"
+#include "map.h"
 
 /* Request Methods */
 extern char *request_methods[];
