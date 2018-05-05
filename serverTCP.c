@@ -143,15 +143,16 @@ int main(int argc , char *argv[])
                 }
             }
         } else {
-
+            if(socketsavaibles==0){
         		if ((new_socket = accept(master_socket, (struct sockaddr *)&address, (socklen_t*)&addrlen))<0)
             	{
 	                perror("accept");
 	                exit(EXIT_FAILURE);
             	}
                 char buffer2[] = "All sockets busy, retry later.";
-        		send(new_socket , buffer2 , strlen(buffer) , 0 );
+        		send(new_socket , buffer2 , strlen(buffer2) , 0 );
         		close(new_socket);
+            }
         }
           
         //else its some IO operation on some other socket :)
