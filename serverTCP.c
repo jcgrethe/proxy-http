@@ -20,7 +20,7 @@
 int main(int argc , char *argv[])
 {
     int opt = TRUE;
-    int master_socket , addrlen , new_socket , client_socket[30] , max_clients = 30 , activity, i , valread , sd;
+    int master_socket , addrlen , new_socket , client_socket[30] , max_clients = 1 , activity, i , valread , sd;
     int max_sd;
     struct sockaddr_in address;
     int socketsavaibles;
@@ -111,7 +111,7 @@ int main(int argc , char *argv[])
         }
           
         //If something happened on the master socket , then its an incoming connection
-        if (FD_ISSET(master_socket, &readfds) && socketsavaibles>0) 
+        if (FD_ISSET(master_socket, &readfds) && socketsavaibles > 0) 
         {
             if ((new_socket = accept(master_socket, (struct sockaddr *)&address, (socklen_t*)&addrlen))<0)
             {
@@ -142,6 +142,16 @@ int main(int argc , char *argv[])
                     break;
                 }
             }
+        } else {
+
+        		if ((new_socket = accept(master_socket, (struct sockaddr *)&address, (socklen_t*)&addrlen))<0)
+            	{
+	                perror("accept");
+	                exit(EXIT_FAILURE);
+            	}
+                char buffer2[] = "All sockets busy, retry later.";
+        		send(new_socket , buffer2 , strlen(buffer) , 0 );
+        		close(new_socket);
         }
           
         //else its some IO operation on some other socket :)
