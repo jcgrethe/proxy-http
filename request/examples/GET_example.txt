@@ -1,0 +1,6 @@
+GET http://itba.edu.ar/foo?bar HTTP/1.1
+Host: itba.edu.ar
+User-Agent: curl/7.55.1
+Accept: */*
+Proxy-Connection: Keep-Alive
+
