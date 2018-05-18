@@ -21,7 +21,6 @@ buffer_init(buffer *b, const size_t n, uint8_t *data) {
     b->limit = b->data + n;
 }
 
-
 inline bool
 buffer_can_write(buffer *b) {
     return b->limit - b->write > 0;
