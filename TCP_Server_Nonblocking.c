@@ -8,18 +8,34 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <string.h>
-
+#include "map.h"
+#include<arpa/inet.h> //inet_addr
 #define SERVER_PORT  12345
 #define TRUE             1
 #define FALSE            0
 
-int startServer(){
+
+
+struct pipe{
+int pipeToChild[2];
+int pipeFromChild[2];  
+int sock;
+};
+void writeToChild(struct pipe * pipeStruct,char * buffer);
+int handleFirstConnection(char* buffer);
+
+static int stdinFD = STDIN_FILENO;
+static int stdoutFD = STDOUT_FILENO;
+
+int main(int args, char* argv[]){
+   struct pipe * pipeStruct;
    int    i, len, rc, on = 1;
    int    active_socket, max_sd, new_sd, desc_ready;
-   char   buffer[80];
+   char   buffer[1025];
    struct sockaddr_in   addr;
    struct fd_set        master_set, working_set;
-
+   map_str_t map;
+   map_init(&map);
    /* Creating an Active Socket to listen requests.*/
    active_socket = socket(AF_INET, SOCK_STREAM, 0);
    if (active_socket < 0){
@@ -41,6 +57,14 @@ int startServer(){
       close(active_socket);
       exit(EXIT_FAILURE);
    }
+
+   // /* Setting Active socket as not astyncrhonus I/O . */
+   // rc = fcntl(active_socket, F_SETFL, O_ASYNC);
+   // if (rc < 0){
+   //    perror("Error setting Active Socket as non-blocking.\n");
+   //    close(active_socket);
+   //    exit(EXIT_FAILURE);
+   // }
 
    /* Let`s bind our Active Socket to a port. */
    memset(&addr, 0, sizeof(addr));
@@ -102,8 +126,10 @@ int startServer(){
                } while (new_sd != -1);
             }
             else{
+               int total=0;
                do{
                   rc = recv(i, buffer, sizeof(buffer), 0);
+                  total+=rc;
                   if (rc < 0){
                      if (errno != EWOULDBLOCK){
                         perror("recv() error.\n");
@@ -114,16 +140,69 @@ int startServer(){
                      printf("Bye bye connection!\n");
                      break;
                   }
-                  len = rc;
-                  printf("%d bytes received. \n", len);
-                  rc = send(i, buffer, len, 0);
-                  if (rc < 0){
-                     perror("Send fail.\n");
-                     break;
-                  }
-               } while (TRUE);
+
+                  if((pipeStruct=map_get(&map,i))!=NULL){
+                     writeToChild(pipeStruct,buffer);
+                  }else{
+                     pipeStruct=malloc(sizeof(struct pipe));
+                     if (pipe(pipeStruct->pipeToChild) == -1 || pipe(pipeStruct->pipeFromChild) == -1) {
+                          perror("Could not build pipe.");
+                          exit(1);
+                      }
+                     map_set(&map,i,pipeStruct);
+                     // Close unused ends of pipes
+                     int pid = fork();
+                     if(pid == 0){
+                        close(stdinFD);
+                        close(stdoutFD);
+                        stdinFD = stdoutFD = -1;
+                        close(pipeStruct->pipeToChild[1]);
+                        close(pipeStruct->pipeFromChild[0]);
+                        pipeStruct->pipeToChild[1] = pipeStruct->pipeFromChild[0] = -1;
+                        handleFirstConnection(buffer);
+                     }else{
+                        close(pipeStruct->pipeToChild[0]);
+                        close(pipeStruct->pipeFromChild[1]);
+                        pipeStruct->pipeToChild[0] = pipeStruct->pipeFromChild[1] = -1;
+                        writeToChild(pipeStruct,buffer);
+                     } 
+                  }   
+               }while(rc>0 && total<1024*8);
             } 
          } 
       }
    }
 }
+
+
+void writeToChild(struct pipe * pipeStruct,char * buffer){
+   write(pipeStruct->pipeToChild[1],buffer,sizeof(buffer));
+}
+
+int handleFirstConnection(char* buffer){
+   int    socket_w;
+   struct sockaddr_in   addr;
+   struct fd_set        master_set, working_set;
+   /* Creating an Active Socket to listen requests.*/
+   socket_w = socket(AF_INET , SOCK_STREAM , 0);
+   if (socket < 0){
+      perror("Error opening active socket.\n");
+      exit(EXIT_FAILURE);
+   }
+   if(inet_pton(AF_INET, buffer, &addr.sin_addr)<=0)
+    {
+        printf("\n inet_pton error occured\n");
+        return 1;
+    } 
+    if(connect(socket_w,&addr, sizeof(addr)) < 0)
+    {
+       printf("\n Error : Connect Failed \n");
+       return 1;
+    } 
+    if( send(socket_w, "hola" , 5 , 0) < 0){
+            puts("Send failed");
+            return 1;
+      }
+  
+}
+
