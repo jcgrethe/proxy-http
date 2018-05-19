@@ -127,7 +127,7 @@ int main(int args, char* argv[]){
             }
             else{
                int total=0;
-               do{
+               // do{
                   rc = recv(i, buffer, sizeof(buffer), 0);
                   total+=rc;
                   if (rc < 0){
@@ -153,23 +153,29 @@ int main(int args, char* argv[]){
                      map_set(&map,str,pipeStruct);
                      // Close unused ends of pipes
                      int pid = fork();
-                     if(pid == 0){                                                
+                     if(pid == 0){               
+                     // Close unused ends of pipes
+                     close(stdinFD);
+                     close(stdoutFD);
+
+                     stdinFD = stdoutFD = -1;
+
                         close(pipeStruct->pipeToChild[1]);
                         close(pipeStruct->pipeFromChild[0]);
                         pipeStruct->pipeToChild[1] = pipeStruct->pipeFromChild[0] = -1;
                         int soc=handleFirstConnection(buffer);
-                         printf("Handling Connection..");
+                         printf("Handling Connection..\n");
                          handleConnection(pipeStruct,soc);
-                         printf("Ending Connection..");
+                         printf("Ending Connection..\n");
                          exit(0);
                      }else{
                         close(pipeStruct->pipeToChild[0]);
                         close(pipeStruct->pipeFromChild[1]);
                         pipeStruct->pipeToChild[0] = pipeStruct->pipeFromChild[1] = -1;
-                        writeToChild(pipeStruct,buffer);
+                        // writeToChild(pipeStruct,buffer);
                      } 
                   }
-               }while(rc>0 && total<1024*8);
+               // }while(rc>0 && total<1024*8);
             } 
          } 
       }
@@ -213,7 +219,7 @@ void handleConnection(struct pipe * structpipe,int soc){
     char buf[BUF_SIZE];
     int bytesRead;
     while(exitv == 0){
-        bytesRead = read(structpipe->pipeFromChild[0], buf, BUF_SIZE);
+        bytesRead = read(structpipe->pipeToChild[0], buf, BUF_SIZE);
         if (bytesRead > 0)
             if(send(soc, buf, sizeof(buf), 0) == -1){
                 perror("send");
