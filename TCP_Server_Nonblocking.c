@@ -13,7 +13,7 @@
 #define SERVER_PORT  12345
 #define TRUE             1
 #define FALSE            0
-
+#define BUF_SIZE     1025
 
 
 struct pipe{
@@ -23,7 +23,7 @@ int sock;
 };
 void writeToChild(struct pipe * pipeStruct,char * buffer);
 int handleFirstConnection(char* buffer);
-
+void handleConnection(struct pipe * structpipe,int soc);
 static int stdinFD = STDIN_FILENO;
 static int stdoutFD = STDOUT_FILENO;
 
@@ -157,14 +157,18 @@ int main(int args, char* argv[]){
                         close(pipeStruct->pipeToChild[1]);
                         close(pipeStruct->pipeFromChild[0]);
                         pipeStruct->pipeToChild[1] = pipeStruct->pipeFromChild[0] = -1;
-                        handleFirstConnection(buffer);
+                        int soc=handleFirstConnection(buffer);
+                         printf("Handling Connection..");
+                         handleConnection(pipeStruct,soc);
+                         printf("Ending Connection..");
+                         exit(0);
                      }else{
                         close(pipeStruct->pipeToChild[0]);
                         close(pipeStruct->pipeFromChild[1]);
                         pipeStruct->pipeToChild[0] = pipeStruct->pipeFromChild[1] = -1;
                         writeToChild(pipeStruct,buffer);
                      } 
-                 // }   
+                  }
                }while(rc>0 && total<1024*8);
             } 
          } 
@@ -201,5 +205,18 @@ int handleFirstConnection(char* buffer){
                       perror("send");
             exit (1);
       }
+    return sockfd;
 }
 
+void handleConnection(struct pipe * structpipe,int soc){
+    int exitv = 0;
+    char buf[BUF_SIZE];
+    int bytesRead;
+    while(exitv == 0){
+        bytesRead = read(structpipe->pipeFromChild[0], buf, BUF_SIZE);
+        if (send(soc, buf, sizeof(buf), 0) == -1){
+            perror("send");
+            exit(1);
+        }
+    }
+}
