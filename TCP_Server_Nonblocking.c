@@ -13,10 +13,11 @@
 #define TRUE             1
 #define FALSE            0
 
-int startServer(){
+
+int main(int args, char* argv[]){
    int    i, len, rc, on = 1;
    int    active_socket, max_sd, new_sd, desc_ready;
-   char   buffer[80];
+   char   buffer[1025];
    struct sockaddr_in   addr;
    struct fd_set        master_set, working_set;
 
@@ -41,6 +42,14 @@ int startServer(){
       close(active_socket);
       exit(EXIT_FAILURE);
    }
+
+   // /* Setting Active socket as not astyncrhonus I/O . */
+   // rc = fcntl(active_socket, F_SETFL, O_ASYNC);
+   // if (rc < 0){
+   //    perror("Error setting Active Socket as non-blocking.\n");
+   //    close(active_socket);
+   //    exit(EXIT_FAILURE);
+   // }
 
    /* Let`s bind our Active Socket to a port. */
    memset(&addr, 0, sizeof(addr));
@@ -102,7 +111,6 @@ int startServer(){
                } while (new_sd != -1);
             }
             else{
-               do{
                   rc = recv(i, buffer, sizeof(buffer), 0);
                   if (rc < 0){
                      if (errno != EWOULDBLOCK){
@@ -114,16 +122,16 @@ int startServer(){
                      printf("Bye bye connection!\n");
                      break;
                   }
-                  len = rc;
-                  printf("%d bytes received. \n", len);
-                  rc = send(i, buffer, len, 0);
-                  if (rc < 0){
-                     perror("Send fail.\n");
-                     break;
+                  int pid = fork();
+                  if(pid == 0){
+                     handleConnection(buffer);
                   }
-               } while (TRUE);
             } 
          } 
       }
    }
+}
+
+int handleConnection(char* buffer){
+   printf("HOLAA FORKKK FOKKRR\n");
 }
