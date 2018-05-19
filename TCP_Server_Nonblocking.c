@@ -214,9 +214,10 @@ void handleConnection(struct pipe * structpipe,int soc){
     int bytesRead;
     while(exitv == 0){
         bytesRead = read(structpipe->pipeFromChild[0], buf, BUF_SIZE);
-        if (send(soc, buf, sizeof(buf), 0) == -1){
-            perror("send");
-            exit(1);
-        }
+        if (bytesRead > 0)
+            if(send(soc, buf, sizeof(buf), 0) == -1){
+                perror("send");
+                exit(1);
+            }
     }
 }
