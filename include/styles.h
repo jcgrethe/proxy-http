@@ -24,4 +24,10 @@
 #define STPREFIX "-_-_-_-"  // For subtitles
 #define STSUFIX "-_-_-_-"
 
-// Combine titles with colors like this: printf(SCOLOR SPREFIX " Succes using styles! " SSUFIX RESETCOLOR);
+// Examples:
+//    printf(SCOLOR SPREFIX " Succes using styles! " SSUFIX RESETCOLOR"\n");
+//    printf(ECOLOR EPREFIX " Error using styles! " ESUFIX RESETCOLOR"\n");
+//    printf(ICOLOR IPREFIX " Info using styles! " ISUFIX RESETCOLOR"\n");
+//    printf(WCOLOR WPREFIX " Warning using styles! " WSUFIX RESETCOLOR"\n");
+//    printf(TCOLOR TPREFIX " Title using styles! " TSUFIX RESETCOLOR"\n");
+//    printf(STCOLOR STPREFIX " Subtitle using styles! " STSUFIX RESETCOLOR"\n");
