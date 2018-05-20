@@ -21,7 +21,7 @@ int pipeToChild[2];
 int pipeFromChild[2];  
 int sock;
 };
-void writeToChild(struct pipe * pipeStruct,char * buffer);
+void writeToChild(struct pipe * pipeStruct,char * buffer,int rc);
 int handleFirstConnection(char* buffer);
 void handleConnection(struct pipe * structpipe,int soc);
 static int stdinFD = STDIN_FILENO;
@@ -127,8 +127,12 @@ int main(int args, char* argv[]){
             }
             else{
                int total=0;
-               // do{
-                  rc = recv(i, buffer, sizeof(buffer), 0);
+               //do{
+                  for(int x=0;x<BUF_SIZE;x++)
+                    buffer[x]=0;
+                  rc = recv(i, buffer, sizeof(buffer), MSG_DONTWAIT);
+                  //printf("%d\n",rc ); 
+                  //printf("%s\n",buffer);
                   total+=rc;
                   if (rc < 0){
                      if (errno != EWOULDBLOCK){
@@ -142,8 +146,10 @@ int main(int args, char* argv[]){
                   }
                   char str[12];
                   sprintf(str,"%d",i);
-                  if((pipeStruct=map_get(&map,str))!=NULL){
-                     writeToChild(pipeStruct,buffer);
+                  void ** aux;
+                  if((aux=map_get(&map,str))!=NULL){
+                    pipeStruct=*aux;
+                     writeToChild(pipeStruct,buffer,rc);
                   }else{
                      pipeStruct=malloc(sizeof(struct pipe));
                      if (pipe(pipeStruct->pipeToChild) == -1 || pipe(pipeStruct->pipeFromChild) == -1) {
@@ -156,7 +162,7 @@ int main(int args, char* argv[]){
                      if(pid == 0){               
                      // Close unused ends of pipes
                      close(stdinFD);
-                     close(stdoutFD);
+                     //close(stdoutFD);
 
                      stdinFD = stdoutFD = -1;
 
@@ -175,7 +181,7 @@ int main(int args, char* argv[]){
                         // writeToChild(pipeStruct,buffer);
                      } 
                   }
-               // }while(rc>0 && total<1024*8);
+               //}while(total>0);
             } 
          } 
       }
@@ -183,8 +189,8 @@ int main(int args, char* argv[]){
 }
 
 
-void writeToChild(struct pipe * pipeStruct,char * buffer){
-   write(pipeStruct->pipeToChild[1],buffer,sizeof(buffer));
+void writeToChild(struct pipe * pipeStruct,char * buffer,int rc){
+   write(pipeStruct->pipeToChild[1],buffer,rc);
 }
 
 int handleFirstConnection(char* buffer){
@@ -195,7 +201,7 @@ int handleFirstConnection(char* buffer){
             perror("socket");
             exit(1);
         }
-        printf("%s\n",buffer);
+       // printf("%s\n",buffer);
         their_addr.sin_addr.s_addr = inet_addr(buffer);
         their_addr.sin_family = AF_INET;      /* host byte order */
         their_addr.sin_port = htons(10000);    /* short, network byte order */
@@ -206,7 +212,7 @@ int handleFirstConnection(char* buffer){
             perror("connect");
             exit(1);
         }
-      printf("pasa\n");
+      //printf("pasa\n");
     if (send(sockfd, "Hello, world!\n", 14, 0) == -1){
                       perror("send");
             exit (1);
@@ -216,14 +222,19 @@ int handleFirstConnection(char* buffer){
 
 void handleConnection(struct pipe * structpipe,int soc){
     int exitv = 0;
-    char buf[BUF_SIZE];
+    char *buf=calloc(1,BUF_SIZE);
     int bytesRead;
     while(exitv == 0){
         bytesRead = read(structpipe->pipeToChild[0], buf, BUF_SIZE);
-        if (bytesRead > 0)
-            if(send(soc, buf, sizeof(buf), 0) == -1){
+        if (bytesRead > 0){
+            printf("%s\n",buf);
+            if(send(soc, buf, bytesRead, 0) == -1){
                 perror("send");
                 exit(1);
             }
+            for(int x=0;x<bytesRead;x++)
+              buf[x]=0;
+        }
+        bytesRead=0;
     }
 }
