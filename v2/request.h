@@ -3,11 +3,9 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-
 #include <netinet/in.h>
 
 #include "buffer.h"
-
 #include "parser_utils.h"
 
 enum http_method {
@@ -48,7 +46,7 @@ struct request {
 enum request_state {
 
    request_method,
-   request_request_target,
+   request_target,
    request_HTTP_version,
    request_CRLF,
 

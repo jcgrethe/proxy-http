@@ -27,7 +27,7 @@ PARSER_UTILS=parser_utils.c
 all: $(PROXY_OUT)
 
 $(PROXY_OUT):
-	$(CC) -pthread $(MAIN) $(BUFFER) $(NETUTILS) $(REQUEST) $(SELECTOR) $(HTTP) $(HTTP_NIO) $(STM) $(PARSER) $(PARSER_UTILS) -o $(PROXY_OUT)
+	$(CC) -pthread $(MAIN) $(BUFFER) $(NETUTILS) $(PARSER) $(PARSER_UTILS) $(REQUEST) $(SELECTOR) $(HTTP) $(HTTP_NIO) $(STM) -o $(PROXY_OUT)
 
 clean:
 	rm proxy

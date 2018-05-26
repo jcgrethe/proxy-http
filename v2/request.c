@@ -28,7 +28,10 @@ method(const uint8_t c, struct request_parser* p) {
             next = request_method;
             break;
         case STRING_CMP_EQ:
-            next = request_request_target;
+            next = request_target;
+
+            p->request->method = p->http_method_parser->state;
+
             break;
         case STRING_CMP_NEQ:
         default:
@@ -155,7 +158,7 @@ request_parser_feed (struct request_parser* p, const uint8_t c) {
                 d = parser_utils_strcmpi("POST");
                 break;
             default:
-            p->state = request_error;
+            p->state = request_error_unsupported_method;
             break;
         }
         p->http_method_parser = parser_init(parser_no_classes(), &d);
@@ -166,7 +169,7 @@ request_parser_feed (struct request_parser* p, const uint8_t c) {
         case request_method:
             next = method(c, p);
             break;
-        case request_request_target:
+        case request_target:
             // next = cmd(c, p);
             break;
         case request_HTTP_version:
