@@ -20,46 +20,36 @@ remaining_is_done(struct request_parser* p) {
 //////////////////////////////////////////////////////////////////////////////
 
 static enum request_state
-version(const uint8_t c, struct request_parser* p) {
-    enum request_state next;
-    switch (c) {
-        case 0x05:
-            next = request_cmd;
-            break;
-        default:
-            next = request_error_unsupported_version;
-            break;
-    }
-
-    return next;
-}
-
-static enum request_state
 method(const uint8_t c, struct request_parser* p) {
     enum request_state next;
-    switch (c) {
-        case 0x05:
-            next = request_cmd;
+
+    switch (parser_feed(p->http_method_parser, c)->type) {
+        case STRING_CMP_MAYEQ:
+            next = request_method;
             break;
+        case STRING_CMP_EQ:
+            next = request_request_target;
+            break;
+        case STRING_CMP_NEQ:
         default:
-            next = request_error_unsupported_version;
+            next = request_error_unsupported_method;
             break;
     }
 
     return next;
 }
 
-static enum request_state
-cmd(const uint8_t c, struct request_parser* p) {
-    p->request->cmd = c;
+// static enum request_state
+// cmd(const uint8_t c, struct request_parser* p) {
+//     p->request->cmd = c;
 
-    return request_rsv;
-}
+//     return request_rsv;
+// }
 
-static enum request_state
-rsv(const uint8_t c, struct request_parser* p) {
-    return request_atyp;
-}
+// static enum request_state
+// rsv(const uint8_t c, struct request_parser* p) {
+//     return request_atyp;
+// }
 
 static enum request_state
 atyp(const uint8_t c, struct request_parser* p) {
@@ -140,7 +130,7 @@ dstport(const uint8_t c, struct request_parser* p) {
 
 extern void
 request_parser_init (struct request_parser* p) {
-    p->state = request_version;
+    p->state = request_method;
     memset(p->request, 0, sizeof(*(p->request)));
 }
 
@@ -149,18 +139,41 @@ extern enum request_state
 request_parser_feed (struct request_parser* p, const uint8_t c) {
     enum request_state next;
 
+
+    // If the parser has NULL for method sub_parser, then instantiate
+    // else, use it and control return of feeding a byte.
+    if(p->http_method_parser == NULL){
+        struct parser_definition d;
+        switch(c) {
+            case 'G':
+                d = parser_utils_strcmpi("GET");
+                break;
+            case 'H':
+                d = parser_utils_strcmpi("HEAD");
+                break;
+            case 'P':
+                d = parser_utils_strcmpi("POST");
+                break;
+            default:
+            p->state = request_error;
+            break;
+        }
+        p->http_method_parser = parser_init(parser_no_classes(), &d);
+    }
+
+
     switch(p->state) {
         case request_method:
-            next = version(c, p);
+            next = method(c, p);
             break;
         case request_request_target:
-            next = cmd(c, p);
+            // next = cmd(c, p);
             break;
         case request_HTTP_version:
-            next = rsv(c, p);
+            // next = rsv(c, p);
             break;
         case request_CRLF:
-            next = atyp(c, p);
+            // next = atyp(c, p);
             break;
         case request_dstaddr_fqdn:
             next = dstaddr_fqdn(c, p);

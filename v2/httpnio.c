@@ -103,15 +103,6 @@ enum http_state
 ////////////////////////////////////////////////////////////////////
 // Definición de variables para cada estado
 
-/** usado por HELLO_READ, HELLO_WRITE */
-// struct hello_st {
-//     /** buffer utilizado para I/O */
-//     buffer               *rb, *wb;
-//     struct hello_parser   parser;
-//     /** el método de autenticación seleccionado */
-//     uint8_t               method;
-// } ;
-
 /** usado por REQUEST_READ, REQUEST_WRITE, REQUEST_RESOLV */
 struct request_st
 {
@@ -454,9 +445,9 @@ request_process(struct selector_key *key, struct request_st *d)
     unsigned ret;
     pthread_t tid;
 
-    switch (d->request.cmd)
+    switch (d->request.method)
     {
-    case socks_req_cmd_connect:
+    case http_method_GET:
         // esto mejoraría enormemente de haber usado
         // sockaddr_storage en el request
 
@@ -519,8 +510,8 @@ request_process(struct selector_key *key, struct request_st *d)
         }
         }
         break;
-    case socks_req_cmd_bind:
-    case socks_req_cmd_associate:
+    case http_method_HEAD:
+    case http_method_POST:
     default:
         d->status = status_command_not_supported;
         ret = REQUEST_WRITE;

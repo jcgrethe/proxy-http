@@ -8,41 +8,17 @@
 
 #include "buffer.h"
 
-/*   The SOCKS request is formed as follows:
- *
- *      +----+-----+-------+------+----------+----------+
- *      |VER | CMD |  RSV  | ATYP | DST.ADDR | DST.PORT |
- *      +----+-----+-------+------+----------+----------+
- *      | 1  |  1  | X'00' |  1   | Variable |    2     |
- *      +----+-----+-------+------+----------+----------+
- *
- *   Where:
- *
- *        o  VER    protocol version: X'05'
- *        o  CMD
- *           o  CONNECT X'01'
- *           o  BIND X'02'
- *           o  UDP ASSOCIATE X'03'
- *        o  RSV    RESERVED
- *        o  ATYP   address type of following address
- *           o  IP V4 address: X'01'
- *           o  DOMAINNAME: X'03'
- *           o  IP V6 address: X'04'
- *        o  DST.ADDR       desired destination address
- *        o  DST.PORT desired destination port in network octet
- *           order
- */
-/*
- * miembros de la sección 4: `Requests'
- *  - Cmd
- *  - AddressType
- *  - Address: IPAddress (4 y 6), DomainNameAdddres
- */
+#include "parser_utils.h"
 
-enum socks_req_cmd {
-    socks_req_cmd_connect   = 0x01,
-    socks_req_cmd_bind      = 0x02,
-    socks_req_cmd_associate = 0x03,
+enum http_method {
+    http_method_GET,
+    http_method_POST,
+    http_method_HEAD
+};
+
+enum http_HTTP_version {
+    http_HTTP_version_1_0,
+    http_HTTP_version_1_1
 };
 
 enum socks_addr_type {
@@ -58,7 +34,11 @@ union socks_addr {
 };
 
 struct request {
-    enum  socks_req_cmd   cmd;
+
+    /** http **/
+    enum http_method method;
+    enum http_HTTP_version HTTP_version;
+
     enum  socks_addr_type dest_addr_type;
     union socks_addr      dest_addr;
     /** port in network byte order */
@@ -89,6 +69,7 @@ enum request_state {
 
    // y apartir de aca son considerado con error
    request_error,
+   request_error_unsupported_method,
    request_error_unsupported_version,
    request_error_unsupported_atyp,
 
@@ -101,6 +82,9 @@ struct request_parser {
    uint8_t n;
    /** cuantos bytes ya leimos */
    uint8_t i;
+
+   /** http method parser **/
+   struct parser * http_method_parser;
 };
 
 /*
