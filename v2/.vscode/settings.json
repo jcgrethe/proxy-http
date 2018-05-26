@@ -2,6 +2,7 @@
     "files.associations": {
         "socket.h": "c",
         "selector.h": "c",
-        "signal.h": "c"
+        "signal.h": "c",
+        "httpnio.h": "c"
     }
 }

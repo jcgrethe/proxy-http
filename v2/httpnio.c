@@ -1,5 +1,5 @@
 /**
- * socks5nio.c  - controla el flujo de un proxy SOCKSv5 (sockets no bloqueantes)
+ * httpnio.c  - controla el flujo de un proxy SOCKSv5 (sockets no bloqueantes)
  */
 #include <stdio.h>
 #include <stdlib.h> // malloc
@@ -16,7 +16,7 @@
 #include "buffer.h"
 
 #include "stm.h"
-#include "socks5nio.h"
+#include "httpnio.h"
 #include "netutils.h"
 
 #define N(x) (sizeof(x) / sizeof((x)[0]))
@@ -24,31 +24,6 @@
 /** maquina de estados general */
 enum socks_v5state
 {
-    // /**
-    //  * recibe el mensaje `hello` del cliente, y lo procesa
-    //  *
-    //  * Intereses:
-    //  *     - OP_READ sobre client_fd
-    //  *
-    //  * Transiciones:
-    //  *   - HELLO_READ  mientras el mensaje no esté completo
-    //  *   - HELLO_WRITE cuando está completo
-    //  *   - ERROR       ante cualquier error (IO/parseo)
-    //  */
-    // HELLO_READ,
-
-    // /**
-    //  * envía la respuesta del `hello' al cliente.
-    //  *
-    //  * Intereses:
-    //  *     - OP_WRITE sobre client_fd
-    //  *
-    //  * Transiciones:
-    //  *   - HELLO_WRITE  mientras queden bytes por enviar
-    //  *   - REQUEST_READ cuando se enviaron todos los bytes
-    //  *   - ERROR        ante cualquier error (IO/parseo)
-    //  */
-    // HELLO_WRITE,
 
     /**
      * recibe el mensaje `request` del cliente, y lo inicia su proceso
@@ -187,7 +162,7 @@ struct copy
  * Se utiliza un contador de referencias (references) para saber cuando debemos
  * liberarlo finalmente, y un pool para reusar alocaciones previas.
  */
-struct socks5
+struct http
 {
     /** información del cliente */
     struct sockaddr_storage client_addr;
@@ -210,7 +185,6 @@ struct socks5
 
     /** estados para el client_fd */
     union {
-        // struct hello_st           hello;
         struct request_st request;
         struct copy copy;
     } client;
@@ -228,11 +202,11 @@ struct socks5
     unsigned references;
 
     /** siguiente en el pool */
-    struct socks5 *next;
+    struct http *next;
 };
 
 /**
- * Pool de `struct socks5', para ser reusados.
+ * Pool de `struct http', para ser reusados.
  *
  * Como tenemos un unico hilo que emite eventos no necesitamos barreras de
  * contención.
@@ -240,16 +214,16 @@ struct socks5
 
 static const unsigned max_pool = 50; // tamaño máximo
 static unsigned pool_size = 0;       // tamaño actual
-static struct socks5 *pool = 0;      // pool propiamente dicho
+static struct http *pool = 0;      // pool propiamente dicho
 
 static const struct state_definition *
-socks5_describe_states(void);
+http_describe_states(void);
 
-/** crea un nuevo `struct socks5' */
-static struct socks5 *
-socks5_new(int client_fd)
+/** crea un nuevo `struct http' */
+static struct http *
+http_new(int client_fd)
 {
-    struct socks5 *ret;
+    struct http *ret;
 
     if (pool == NULL)
     {
@@ -272,9 +246,8 @@ socks5_new(int client_fd)
     ret->client_addr_len = sizeof(ret->client_addr);
 
     ret->stm.initial = REQUEST_READ;
-    // ret->stm    .initial   = HELLO_READ;
     ret->stm.max_state = ERROR;
-    ret->stm.states = socks5_describe_states();
+    ret->stm.states = http_describe_states();
     stm_init(&ret->stm);
 
     buffer_init(&ret->read_buffer, N(ret->raw_buff_a), ret->raw_buff_a);
@@ -287,7 +260,7 @@ finally:
 
 /** realmente destruye */
 static void
-socks5_destroy_(struct socks5 *s)
+http_destroy_(struct http *s)
 {
     if (s->origin_resolution != NULL)
     {
@@ -298,11 +271,11 @@ socks5_destroy_(struct socks5 *s)
 }
 
 /**
- * destruye un  `struct socks5', tiene en cuenta las referencias
+ * destruye un  `struct http', tiene en cuenta las referencias
  * y el pool de objetos.
  */
 static void
-socks5_destroy(struct socks5 *s)
+http_destroy(struct http *s)
 {
     if (s == NULL)
     {
@@ -320,7 +293,7 @@ socks5_destroy(struct socks5 *s)
             }
             else
             {
-                socks5_destroy_(s);
+                http_destroy_(s);
             }
         }
     }
@@ -330,9 +303,9 @@ socks5_destroy(struct socks5 *s)
     }
 }
 
-void socksv5_pool_destroy(void)
+void http_pool_destroy(void)
 {
-    struct socks5 *next, *s;
+    struct http *next, *s;
     for (s = pool; s != NULL; s = next)
     {
         next = s->next;
@@ -340,29 +313,29 @@ void socksv5_pool_destroy(void)
     }
 }
 
-/** obtiene el struct (socks5 *) desde la llave de selección  */
-#define ATTACHMENT(key) ((struct socks5 *)(key)->data)
+/** obtiene el struct (http *) desde la llave de selección  */
+#define ATTACHMENT(key) ((struct http *)(key)->data)
 
 /* declaración forward de los handlers de selección de una conexión
  * establecida entre un cliente y el proxy.
  */
-static void socksv5_read(struct selector_key *key);
-static void socksv5_write(struct selector_key *key);
-static void socksv5_block(struct selector_key *key);
-static void socksv5_close(struct selector_key *key);
-static const struct fd_handler socks5_handler = {
-    .handle_read = socksv5_read,
-    .handle_write = socksv5_write,
-    .handle_close = socksv5_close,
-    .handle_block = socksv5_block,
+static void http_read(struct selector_key *key);
+static void http_write(struct selector_key *key);
+static void http_block(struct selector_key *key);
+static void http_close(struct selector_key *key);
+static const struct fd_handler http_handler = {
+    .handle_read = http_read,
+    .handle_write = http_write,
+    .handle_close = http_close,
+    .handle_block = http_block,
 };
 
 /** Intenta aceptar la nueva conexión entrante*/
-void socksv5_passive_accept(struct selector_key *key)
+void http_passive_accept(struct selector_key *key)
 {
     struct sockaddr_storage client_addr;
     socklen_t client_addr_len = sizeof(client_addr);
-    struct socks5 *state = NULL;
+    struct http *state = NULL;
 
     const int client = accept(key->fd, (struct sockaddr *)&client_addr,
                               &client_addr_len);
@@ -374,7 +347,7 @@ void socksv5_passive_accept(struct selector_key *key)
     {
         goto fail;
     }
-    state = socks5_new(client);
+    state = http_new(client);
     if (state == NULL)
     {
         // sin un estado, nos es imposible manejaro.
@@ -385,7 +358,7 @@ void socksv5_passive_accept(struct selector_key *key)
     memcpy(&state->client_addr, &client_addr, client_addr_len);
     state->client_addr_len = client_addr_len;
 
-    if (SELECTOR_SUCCESS != selector_register(key->s, client, &socks5_handler,
+    if (SELECTOR_SUCCESS != selector_register(key->s, client, &http_handler,
                                               OP_READ, state))
     {
         goto fail;
@@ -396,118 +369,8 @@ fail:
     {
         close(client);
     }
-    socks5_destroy(state);
+    http_destroy(state);
 }
-
-////////////////////////////////////////////////////////////////////////////////
-// HELLO
-////////////////////////////////////////////////////////////////////////////////
-
-// /** callback del parser utilizado en `read_hello' */
-// static void
-// on_hello_method(struct hello_parser *p, const uint8_t method) {
-//     uint8_t *selected  = p->data;
-
-//     if(SOCKS_HELLO_NOAUTHENTICATION_REQUIRED == method) {
-//        *selected = method;
-//     }
-// }
-
-// /** inicializa las variables de los estados HELLO_… */
-// static void
-// hello_read_init(const unsigned state, struct selector_key *key) {
-//     struct hello_st *d = &ATTACHMENT(key)->client.hello;
-
-//     d->rb                              = &(ATTACHMENT(key)->read_buffer);
-//     d->wb                              = &(ATTACHMENT(key)->write_buffer);
-//     d->parser.data                     = &d->method;
-//     d->parser.on_authentication_method = on_hello_method, hello_parser_init(
-//             &d->parser);
-// }
-
-// static unsigned
-// hello_process(const struct hello_st* d);
-
-// /** lee todos los bytes del mensaje de tipo `hello' y inicia su proceso */
-// static unsigned
-// hello_read(struct selector_key *key) {
-//     struct hello_st *d = &ATTACHMENT(key)->client.hello;
-//     unsigned  ret      = HELLO_READ;
-//         bool  error    = false;
-//      uint8_t *ptr;
-//       size_t  count;
-//      ssize_t  n;
-
-//     ptr = buffer_write_ptr(d->rb, &count);
-//     n = recv(key->fd, ptr, count, 0);
-//     if(n > 0) {
-//         buffer_write_adv(d->rb, n);
-//         const enum hello_state st = hello_consume(d->rb, &d->parser, &error);
-//         if(hello_is_done(st, 0)) {
-//             if(SELECTOR_SUCCESS == selector_set_interest_key(key, OP_WRITE)) {
-//                 ret = hello_process(d);
-//             } else {
-//                 ret = ERROR;
-//             }
-//         }
-//     } else {
-//         ret = ERROR;
-//     }
-
-//     return error ? ERROR : ret;
-// }
-
-// /** procesamiento del mensaje `hello' */
-// static unsigned
-// hello_process(const struct hello_st* d) {
-//     unsigned ret = HELLO_WRITE;
-
-//     uint8_t m = d->method;
-//     const uint8_t r = (m == SOCKS_HELLO_NO_ACCEPTABLE_METHODS) ? 0xFF : 0x00;
-//     if (-1 == hello_marshall(d->wb, r)) {
-//         ret  = ERROR;
-//     }
-//     if (SOCKS_HELLO_NO_ACCEPTABLE_METHODS == m) {
-//         ret  = ERROR;
-//     }
-//     return ret;
-// }
-
-// /** libera los recursos al salir de HELLO_READ */
-// static void
-// hello_read_close(const unsigned state, struct selector_key *key) {
-//     struct hello_st *d = &ATTACHMENT(key)->client.hello;
-
-//     hello_parser_close(&d->parser);
-// }
-
-// /** escribe todos los bytes de la respuesta al mensaje `hello' */
-// static unsigned
-// hello_write(struct selector_key *key) {
-//     struct hello_st *d = &ATTACHMENT(key)->client.hello;
-
-//     unsigned  ret     = HELLO_WRITE;
-//      uint8_t *ptr;
-//       size_t  count;
-//      ssize_t  n;
-
-//     ptr = buffer_read_ptr(d->wb, &count);
-//     n = send(key->fd, ptr, count, MSG_NOSIGNAL);
-//     if(n == -1) {
-//         ret = ERROR;
-//     } else {
-//         buffer_read_adv(d->wb, n);
-//         if(!buffer_can_read(d->wb)) {
-//             if(SELECTOR_SUCCESS == selector_set_interest_key(key, OP_READ)) {
-//                 ret = REQUEST_READ;
-//             } else {
-//                 ret = ERROR;
-//             }
-//         }
-//     }
-
-//     return ret;
-// }
 
 ////////////////////////////////////////////////////////////////////////////////
 // REQUEST
@@ -675,7 +538,7 @@ static void *
 request_resolv_blocking(void *data)
 {
     struct selector_key *key = (struct selector_key *)data;
-    struct socks5 *s = ATTACHMENT(key);
+    struct http *s = ATTACHMENT(key);
 
     pthread_detach(pthread_self());
     s->origin_resolution = 0;
@@ -708,7 +571,7 @@ static unsigned
 request_resolv_done(struct selector_key *key)
 {
     struct request_st *d = &ATTACHMENT(key)->client.request;
-    struct socks5 *s = ATTACHMENT(key);
+    struct http *s = ATTACHMENT(key);
 
     if (s->origin_resolution == 0)
     {
@@ -763,7 +626,7 @@ request_connect(struct selector_key *key, struct request_st *d)
             }
 
             // esperamos la conexion en el nuevo socket
-            st = selector_register(key->s, *fd, &socks5_handler,
+            st = selector_register(key->s, *fd, &http_handler,
                                    OP_WRITE, key->data);
             if (SELECTOR_SUCCESS != st)
             {
@@ -1051,15 +914,6 @@ copy_w(struct selector_key *key)
 
 /** definición de handlers para cada estado */
 static const struct state_definition client_statbl[] = {
-    // {
-    //     .state            = HELLO_READ,
-    //     .on_arrival       = hello_read_init,
-    //     .on_departure     = hello_read_close,
-    //     .on_read_ready    = hello_read,
-    // }, {
-    //     .state            = HELLO_WRITE,
-    //     .on_write_ready   = hello_write,
-    // },{
     {
         .state = REQUEST_READ,
         .on_arrival = request_init,
@@ -1093,7 +947,7 @@ static const struct state_definition client_statbl[] = {
         .state = ERROR,
     }};
 static const struct state_definition *
-socks5_describe_states(void)
+http_describe_states(void)
 {
     return client_statbl;
 }
@@ -1102,52 +956,52 @@ socks5_describe_states(void)
 // Handlers top level de la conexión pasiva.
 // son los que emiten los eventos a la maquina de estados.
 static void
-socksv5_done(struct selector_key *key);
+http_done(struct selector_key *key);
 
 static void
-socksv5_read(struct selector_key *key)
+http_read(struct selector_key *key)
 {
     struct state_machine *stm = &ATTACHMENT(key)->stm;
     const enum socks_v5state st = stm_handler_read(stm, key);
 
     if (ERROR == st || DONE == st)
     {
-        socksv5_done(key);
+        http_done(key);
     }
 }
 
 static void
-socksv5_write(struct selector_key *key)
+http_write(struct selector_key *key)
 {
     struct state_machine *stm = &ATTACHMENT(key)->stm;
     const enum socks_v5state st = stm_handler_write(stm, key);
 
     if (ERROR == st || DONE == st)
     {
-        socksv5_done(key);
+        http_done(key);
     }
 }
 
 static void
-socksv5_block(struct selector_key *key)
+http_block(struct selector_key *key)
 {
     struct state_machine *stm = &ATTACHMENT(key)->stm;
     const enum socks_v5state st = stm_handler_block(stm, key);
 
     if (ERROR == st || DONE == st)
     {
-        socksv5_done(key);
+        http_done(key);
     }
 }
 
 static void
-socksv5_close(struct selector_key *key)
+http_close(struct selector_key *key)
 {
-    socks5_destroy(ATTACHMENT(key));
+    http_destroy(ATTACHMENT(key));
 }
 
 static void
-socksv5_done(struct selector_key *key)
+http_done(struct selector_key *key)
 {
     const int fds[] = {
         ATTACHMENT(key)->client_fd,

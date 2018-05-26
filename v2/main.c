@@ -23,9 +23,9 @@
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 
-#include "socks5.h"
+#include "http.h"
 #include "selector.h"
-#include "socks5nio.h"
+#include "httpnio.h"
 
 static bool done = false;
 
@@ -117,12 +117,12 @@ main(const int argc, const char **argv) {
         err_msg = "unable to create selector";
         goto finally;
     }
-    const struct fd_handler socksv5 = {
-        .handle_read       = socksv5_passive_accept,
+    const struct fd_handler http = {
+        .handle_read       = http_passive_accept,
         .handle_write      = NULL,
         .handle_close      = NULL, // nada que liberar
     };
-    ss = selector_register(selector, server, &socksv5,
+    ss = selector_register(selector, server, &http,
                                               OP_READ, NULL);
     if(ss != SELECTOR_SUCCESS) {
         err_msg = "registering fd";
@@ -157,7 +157,7 @@ finally:
     }
     selector_close();
 
-    socksv5_pool_destroy();
+    http_pool_destroy();
 
     if(server >= 0) {
         close(server);

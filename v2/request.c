@@ -1,5 +1,5 @@
 /**
- * request.c -- parser del request de SOCKS5
+ * request.c -- parser del request de http
  */
 #include <string.h> // memset
 #include <arpa/inet.h>

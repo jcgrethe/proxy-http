@@ -18,14 +18,14 @@ BUFFER=buffer.c
 NETUTILS=netutils.c
 REQUEST=request.c
 SELECTOR=selector.c
-SOCKS5=socks5.c
-SOCKS5_NIO=socks5nio.c
+HTTP=http.c
+HTTP_NIO=httpnio.c
 STM=stm.c
 
 all: $(PROXY_OUT)
 
 $(PROXY_OUT):
-	$(CC) -pthread $(MAIN) $(BUFFER) $(NETUTILS) $(REQUEST) $(SELECTOR) $(SOCKS5) $(SOCKS5_NIO) $(STM) -o $(PROXY_OUT)
+	$(CC) -pthread $(MAIN) $(BUFFER) $(NETUTILS) $(REQUEST) $(SELECTOR) $(HTTP) $(HTTP_NIO) $(STM) -o $(PROXY_OUT)
 
 clean:
 	rm proxy

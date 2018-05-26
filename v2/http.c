@@ -1,5 +1,5 @@
 /**
- * socks5.c -- Implementa de forma bloqueante un proxy SOCKS5
+ * http.c -- Implementa de forma bloqueante un proxy http
  */
 #include <stdio.h>
 #include <string.h>
@@ -15,7 +15,7 @@
 
 #include <pthread.h>
 
-#include "socks5.h"
+#include "http.h"
 // #include "hello.h"
 #include "request.h"
 #include "netutils.h"
@@ -155,7 +155,7 @@ log_request(const enum socks_response_status status,
 //  * @param caddr  información de la conexiónentrante.
 //  */
 // static void
-// socks5_handle_connection(const int fd, const struct sockaddr *caddr) {
+// http_handle_connection(const int fd, const struct sockaddr *caddr) {
 //     uint8_t method = SOCKS_HELLO_NO_ACCEPTABLE_METHODS;
 //     struct request request;
 //     struct sockaddr *originaddr = 0x00;
@@ -270,7 +270,7 @@ log_request(const enum socks_response_status status,
 //     const struct connection *c = args;
 //     pthread_detach(pthread_self());
 
-//     socks5_handle_connection(c->fd, (struct sockaddr *)&c->addr);
+//     http_handle_connection(c->fd, (struct sockaddr *)&c->addr);
 //     free(args);
 
 //     return 0;
@@ -280,7 +280,7 @@ log_request(const enum socks_response_status status,
 //  * atiende a los clientes de forma concurrente con I/O bloqueante.
 //  */
 // extern int
-// serve_socks5_concurrent_blocking(const int server) {
+// serve_http_concurrent_blocking(const int server) {
 //     for (;;) {
 //         struct sockaddr_in6 caddr;
 //         socklen_t caddrlen = sizeof (caddr);
@@ -293,7 +293,7 @@ log_request(const enum socks_response_status status,
 //             struct connection* c = malloc(sizeof (struct connection));
 //             if (c == NULL) {
 //                 // lo trabajamos iterativamente
-//                 socks5_handle_connection(client, (struct sockaddr*)&caddr);
+//                 http_handle_connection(client, (struct sockaddr*)&caddr);
 //             } else {
 //                 pthread_t tid;
 //                 c->fd = client;
@@ -302,7 +302,7 @@ log_request(const enum socks_response_status status,
 //                 if (pthread_create(&tid, 0, handle_connection_pthread, c)) {
 //                     free(c);
 //                     // lo trabajamos iterativamente
-//                     socks5_handle_connection(client, (struct sockaddr*)&caddr);
+//                     http_handle_connection(client, (struct sockaddr*)&caddr);
 //                 }
 //             }
 //         }
