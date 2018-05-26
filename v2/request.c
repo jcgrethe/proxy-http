@@ -23,6 +23,35 @@ static enum request_state
 method(const uint8_t c, struct request_parser* p) {
     enum request_state next;
 
+
+    // If the parser has NULL for method sub_parser, then instantiate
+    // else, use it and control return of feeding a byte.
+    if(p->http_method_parser == NULL) {
+        struct parser_definition d;
+
+        switch(c) {
+            case 'G':
+                d = parser_utils_strcmpi("GET");
+                break;
+            case 'H':
+                d = parser_utils_strcmpi("HEAD");
+                break;
+            case 'P':
+                d = parser_utils_strcmpi("POST");
+                break;
+            default:
+            p->state = request_error_unsupported_method;
+            break;
+        }
+
+        if(p->state != request_error_unsupported_method) {
+            p->http_method_parser = parser_init(parser_no_classes(), &d);
+        } else {
+            return p->state = next;
+        }
+        
+    }
+
     switch (parser_feed(p->http_method_parser, c)->type) {
         case STRING_CMP_MAYEQ:
             next = request_method;
@@ -30,6 +59,7 @@ method(const uint8_t c, struct request_parser* p) {
         case STRING_CMP_EQ:
             next = request_target;
 
+            //TODO: check this returns expected (GET, HEAD or POST)
             p->request->method = p->http_method_parser->state;
 
             break;
@@ -42,17 +72,29 @@ method(const uint8_t c, struct request_parser* p) {
     return next;
 }
 
-// static enum request_state
-// cmd(const uint8_t c, struct request_parser* p) {
-//     p->request->cmd = c;
+static enum request_state
+target(const uint8_t c, struct request_parser* p) {
+    enum request_state next;
 
-//     return request_rsv;
-// }
+    switch (parser_feed(p->http_method_parser, c)->type) {
+        case STRING_CMP_MAYEQ:
+            next = request_method;
+            break;
+        case STRING_CMP_EQ:
+            next = request_target;
 
-// static enum request_state
-// rsv(const uint8_t c, struct request_parser* p) {
-//     return request_atyp;
-// }
+            //TODO: check this returns expected (GET, HEAD or POST)
+            p->request->method = p->http_method_parser->state;
+
+            break;
+        case STRING_CMP_NEQ:
+        default:
+            next = request_error_unsupported_method;
+            break;
+    }
+
+    return next;
+}
 
 static enum request_state
 atyp(const uint8_t c, struct request_parser* p) {
@@ -142,35 +184,12 @@ extern enum request_state
 request_parser_feed (struct request_parser* p, const uint8_t c) {
     enum request_state next;
 
-
-    // If the parser has NULL for method sub_parser, then instantiate
-    // else, use it and control return of feeding a byte.
-    if(p->http_method_parser == NULL){
-        struct parser_definition d;
-        switch(c) {
-            case 'G':
-                d = parser_utils_strcmpi("GET");
-                break;
-            case 'H':
-                d = parser_utils_strcmpi("HEAD");
-                break;
-            case 'P':
-                d = parser_utils_strcmpi("POST");
-                break;
-            default:
-            p->state = request_error_unsupported_method;
-            break;
-        }
-        p->http_method_parser = parser_init(parser_no_classes(), &d);
-    }
-
-
     switch(p->state) {
         case request_method:
             next = method(c, p);
             break;
         case request_target:
-            // next = cmd(c, p);
+            next = target(c, p);
             break;
         case request_HTTP_version:
             // next = rsv(c, p);
