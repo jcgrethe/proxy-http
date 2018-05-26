@@ -66,6 +66,16 @@ struct request {
 };
 
 enum request_state {
+
+   request_method,
+   request_request_target,
+   request_HTTP_version,
+   request_CRLF,
+
+   request_header_field,
+   request_field_name,
+   request_field_value,
+
    request_version,
    request_cmd,
    request_rsv,

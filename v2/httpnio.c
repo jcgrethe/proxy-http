@@ -21,8 +21,10 @@
 
 #define N(x) (sizeof(x) / sizeof((x)[0]))
 
+#define BUFFER_SIZE 1024*8
+
 /** maquina de estados general */
-enum socks_v5state
+enum http_state
 {
 
     /**
@@ -195,7 +197,7 @@ struct http
     } orig;
 
     /** buffers para ser usados read_buffer, write_buffer.*/
-    uint8_t raw_buff_a[2048], raw_buff_b[2048];
+    uint8_t raw_buff_a[BUFFER_SIZE], raw_buff_b[BUFFER_SIZE];
     buffer read_buffer, write_buffer;
 
     /** cantidad de referencias a este objeto. si es uno se debe destruir */
@@ -962,7 +964,7 @@ static void
 http_read(struct selector_key *key)
 {
     struct state_machine *stm = &ATTACHMENT(key)->stm;
-    const enum socks_v5state st = stm_handler_read(stm, key);
+    const enum http_state st = stm_handler_read(stm, key);
 
     if (ERROR == st || DONE == st)
     {
@@ -974,7 +976,7 @@ static void
 http_write(struct selector_key *key)
 {
     struct state_machine *stm = &ATTACHMENT(key)->stm;
-    const enum socks_v5state st = stm_handler_write(stm, key);
+    const enum http_state st = stm_handler_write(stm, key);
 
     if (ERROR == st || DONE == st)
     {
@@ -986,7 +988,7 @@ static void
 http_block(struct selector_key *key)
 {
     struct state_machine *stm = &ATTACHMENT(key)->stm;
-    const enum socks_v5state st = stm_handler_block(stm, key);
+    const enum http_state st = stm_handler_block(stm, key);
 
     if (ERROR == st || DONE == st)
     {

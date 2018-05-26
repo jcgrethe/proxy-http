@@ -35,6 +35,21 @@ version(const uint8_t c, struct request_parser* p) {
 }
 
 static enum request_state
+method(const uint8_t c, struct request_parser* p) {
+    enum request_state next;
+    switch (c) {
+        case 0x05:
+            next = request_cmd;
+            break;
+        default:
+            next = request_error_unsupported_version;
+            break;
+    }
+
+    return next;
+}
+
+static enum request_state
 cmd(const uint8_t c, struct request_parser* p) {
     p->request->cmd = c;
 
@@ -135,16 +150,16 @@ request_parser_feed (struct request_parser* p, const uint8_t c) {
     enum request_state next;
 
     switch(p->state) {
-        case request_version:
+        case request_method:
             next = version(c, p);
             break;
-        case request_cmd:
+        case request_request_target:
             next = cmd(c, p);
             break;
-        case request_rsv:
+        case request_HTTP_version:
             next = rsv(c, p);
             break;
-        case request_atyp:
+        case request_CRLF:
             next = atyp(c, p);
             break;
         case request_dstaddr_fqdn:
