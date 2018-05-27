@@ -14,11 +14,6 @@ enum http_method {
     http_method_HEAD
 };
 
-enum http_HTTP_version {
-    http_HTTP_version_1_0,
-    http_HTTP_version_1_1
-};
-
 enum socks_addr_type {
     socks_req_addrtype_ipv4   = 0x01,
     socks_req_addrtype_domain = 0x03,
@@ -35,7 +30,6 @@ struct request {
 
     /** http **/
     enum http_method method;
-    enum http_HTTP_version HTTP_version;
 
     enum  socks_addr_type dest_addr_type;
     union socks_addr      dest_addr;
@@ -48,6 +42,7 @@ enum request_state {
    request_method,
    request_target,
    request_HTTP_version,
+   request_SP,
    request_CRLF,
 
    request_header_field,
@@ -81,8 +76,8 @@ struct request_parser {
    /** cuantos bytes ya leimos */
    uint8_t i;
 
-   /** http method parser **/
-   struct parser * http_method_parser;
+   /** http parser for method, http version, etc **/
+   struct parser * http_sub_parser;
 };
 
 /*

@@ -23,10 +23,9 @@ static enum request_state
 method(const uint8_t c, struct request_parser* p) {
     enum request_state next;
 
-
-    // If the parser has NULL for method sub_parser, then instantiate
+    // If the parser has NULL for method sub_parser, then instantiate it
     // else, use it and control return of feeding a byte.
-    if(p->http_method_parser == NULL) {
+    if(p->http_sub_parser == NULL) {
         struct parser_definition d;
 
         switch(c) {
@@ -45,26 +44,30 @@ method(const uint8_t c, struct request_parser* p) {
         }
 
         if(p->state != request_error_unsupported_method) {
-            p->http_method_parser = parser_init(parser_no_classes(), &d);
+            p->http_sub_parser = parser_init(parser_no_classes(), &d);
         } else {
             return p->state = next;
         }
         
     }
 
-    switch (parser_feed(p->http_method_parser, c)->type) {
+    switch (parser_feed(p->http_sub_parser, c)->type) {
         case STRING_CMP_MAYEQ:
             next = request_method;
             break;
         case STRING_CMP_EQ:
-            next = request_target;
+            next = request_SP;
 
             //TODO: check this returns expected (GET, HEAD or POST)
-            p->request->method = p->http_method_parser->state;
+            p->request->method = p->http_sub_parser->state;
 
             break;
         case STRING_CMP_NEQ:
         default:
+            // TODO: this can fail / start
+            parser_utils_strcmpi_destroy(p->http_sub_parser->def);
+            parser_destroy(p->http_sub_parser);
+            // TODO: this can fail / end
             next = request_error_unsupported_method;
             break;
     }
@@ -76,7 +79,7 @@ static enum request_state
 target(const uint8_t c, struct request_parser* p) {
     enum request_state next;
 
-    switch (parser_feed(p->http_method_parser, c)->type) {
+    switch (parser_feed(p->http_sub_parser, c)->type) {
         case STRING_CMP_MAYEQ:
             next = request_method;
             break;
@@ -84,7 +87,7 @@ target(const uint8_t c, struct request_parser* p) {
             next = request_target;
 
             //TODO: check this returns expected (GET, HEAD or POST)
-            p->request->method = p->http_method_parser->state;
+            p->request->method = p->http_sub_parser->state;
 
             break;
         case STRING_CMP_NEQ:
@@ -97,31 +100,56 @@ target(const uint8_t c, struct request_parser* p) {
 }
 
 static enum request_state
-atyp(const uint8_t c, struct request_parser* p) {
+HTTP_version(const uint8_t c, struct request_parser* p) {
     enum request_state next;
 
-    p->request->dest_addr_type = c;
-    switch (p->request->dest_addr_type) {
-        case socks_req_addrtype_ipv4:
-            remaining_set(p, 4);
-            memset(&(p->request->dest_addr.ipv4), 0,
-                   sizeof(p->request->dest_addr.ipv4));
-            p->request->dest_addr.ipv4.sin_family = AF_INET;
-            next = request_dstaddr;
+    // The parser should be NULL after method sub parser destruction.
+    if(p->http_sub_parser == NULL) {
+        struct parser_definition d = parser_utils_strcmpi("HTTP/1.1");
+        p->http_sub_parser = parser_init(parser_no_classes(), &d);
+    }
+
+    switch (parser_feed(p->http_sub_parser, c)->type) {
+        case STRING_CMP_MAYEQ:
+            next = request_method;
             break;
-        case socks_req_addrtype_ipv6:
-            remaining_set(p, 16);
-            memset(&(p->request->dest_addr.ipv6), 0,
-                               sizeof(p->request->dest_addr.ipv6));
-            p->request->dest_addr.ipv6.sin6_family = AF_INET6;
-            next = request_dstaddr;
+        case STRING_CMP_EQ:
+            next = request_SP;
             break;
-        case socks_req_addrtype_domain:
-            next = request_dstaddr_fqdn;
-            break;
+        case STRING_CMP_NEQ:
         default:
-            next = request_error_unsupported_atyp;
+            // TODO: this can fail / start
+            parser_utils_strcmpi_destroy(p->http_sub_parser->def);
+            parser_destroy(p->http_sub_parser);
+            // TODO: this can fail / end
+            next = request_error_unsupported_method;
             break;
+    }
+
+    return next;
+}
+
+static enum request_state
+single_space(const uint8_t c, struct request_parser* p) {
+    enum request_state next;
+
+    if(c != ' ') {
+        next = request_error;
+    } else {
+        switch(p->state) {
+            case request_method:
+                next = request_target;
+                break;
+            case request_target:
+                next = request_HTTP_version;
+                break;
+            case request_HTTP_version:
+                next = request_CRLF;
+                break;
+            default:
+                next = request_error;
+                break;
+        }
     }
 
     return next;
@@ -192,7 +220,10 @@ request_parser_feed (struct request_parser* p, const uint8_t c) {
             next = target(c, p);
             break;
         case request_HTTP_version:
-            // next = rsv(c, p);
+            next = HTTP_version(c, p);
+            break;
+        case request_SP:
+            next = single_space(c, p);
             break;
         case request_CRLF:
             // next = atyp(c, p);
