@@ -53,10 +53,23 @@ method(const uint8_t c, struct request_parser* p) {
 
     switch (parser_feed(p->http_sub_parser, c)->type) {
         case STRING_CMP_MAYEQ:
-            next = request_method;
+
+            // Method is case-sensitive. Should always be CAPS.
+            if(c >= 'a' && c <= 'z') {
+                next = request_error_unsupported_method;
+            } else {
+                next = request_method;
+            }
+
             break;
         case STRING_CMP_EQ:
-            next = request_SP;
+
+            // Method is case-sensitive. Should always be CAPS.
+            if(c >= 'a' && c <= 'z') {
+                next = request_error_unsupported_method;
+            } else {
+                next = request_SP;;
+            }
 
             //TODO: check this returns expected (GET, HEAD or POST)
             p->request->method = p->http_sub_parser->state;
@@ -75,6 +88,7 @@ method(const uint8_t c, struct request_parser* p) {
     return next;
 }
 
+// Based on 5.3.2. absolute-form of RFC 7230
 static enum request_state
 target(const uint8_t c, struct request_parser* p) {
     enum request_state next;
@@ -111,7 +125,12 @@ HTTP_version(const uint8_t c, struct request_parser* p) {
 
     switch (parser_feed(p->http_sub_parser, c)->type) {
         case STRING_CMP_MAYEQ:
-            next = request_method;
+            // HTTP version is case-sensitive. Should always be CAPS.
+            if(c >= 'a' && c <= 'z') {
+                next = request_error_unsupported_http_version;
+            } else {
+                next = request_HTTP_version;
+            }
             break;
         case STRING_CMP_EQ:
             next = request_SP;
@@ -240,7 +259,6 @@ request_parser_feed (struct request_parser* p, const uint8_t c) {
         case request_done:
         case request_error:
         case request_error_unsupported_version:
-        case request_error_unsupported_atyp:
             next = p->state;
             break;
         default:

@@ -49,10 +49,6 @@ enum request_state {
    request_field_name,
    request_field_value,
 
-   request_version,
-   request_cmd,
-   request_rsv,
-   request_atyp,
    request_dstaddr_fqdn,
    request_dstaddr,
    request_dstport,
@@ -63,8 +59,8 @@ enum request_state {
    // y apartir de aca son considerado con error
    request_error,
    request_error_unsupported_method,
+   request_error_unsupported_http_version,
    request_error_unsupported_version,
-   request_error_unsupported_atyp,
 
 };
 
