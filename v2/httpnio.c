@@ -451,64 +451,71 @@ request_process(struct selector_key *key, struct request_st *d)
         // esto mejoraría enormemente de haber usado
         // sockaddr_storage en el request
 
-        switch (d->request.dest_addr_type)
-        {
-        case socks_req_addrtype_ipv4:
-        {
-            ATTACHMENT(key)->origin_domain = AF_INET;
-            d->request.dest_addr.ipv4.sin_port = d->request.dest_port;
-            ATTACHMENT(key)->origin_addr_len =
-                sizeof(d->request.dest_addr.ipv4);
-            memcpy(&ATTACHMENT(key)->origin_addr, &d->request.dest_addr,
-                   sizeof(d->request.dest_addr.ipv4));
-            ret = request_connect(key, d);
-            break;
-        }
-        case socks_req_addrtype_ipv6:
-        {
-            ATTACHMENT(key)->origin_domain = AF_INET6;
-            d->request.dest_addr.ipv6.sin6_port = d->request.dest_port;
-            ATTACHMENT(key)->origin_addr_len =
-                sizeof(d->request.dest_addr.ipv6);
-            memcpy(&ATTACHMENT(key)->origin_addr, &d->request.dest_addr,
-                   sizeof(d->request.dest_addr.ipv6));
-            ret = request_connect(key, d);
-            break;
-        }
-        case socks_req_addrtype_domain:
-        {
-            struct selector_key *k = malloc(sizeof(*key));
-            if (k == NULL)
-            {
-                ret = REQUEST_WRITE;
-                d->status = status_general_SOCKS_server_failure;
-                selector_set_interest_key(key, OP_WRITE);
-            }
-            else
-            {
-                memcpy(k, key, sizeof(*k));
-                if (-1 == pthread_create(&tid, 0,
-                                         request_resolv_blocking, k))
-                {
-                    ret = REQUEST_WRITE;
-                    d->status = status_general_SOCKS_server_failure;
-                    selector_set_interest_key(key, OP_WRITE);
-                }
-                else
-                {
-                    ret = REQUEST_RESOLV;
-                    selector_set_interest_key(key, OP_NOOP);
-                }
-            }
-            break;
-        }
-        default:
-        {
-            ret = REQUEST_WRITE;
-            d->status = status_address_type_not_supported;
-            selector_set_interest_key(key, OP_WRITE);
-        }
-        }
+
+
+
+
+
+
+
+        // switch (d->request.dest_addr_type)
+        // {
+        // case socks_req_addrtype_ipv4:
+        // {
+        //     ATTACHMENT(key)->origin_domain = AF_INET;
+        //     d->request.dest_addr.ipv4.sin_port = d->request.dest_port;
+        //     ATTACHMENT(key)->origin_addr_len =
+        //         sizeof(d->request.dest_addr.ipv4);
+        //     memcpy(&ATTACHMENT(key)->origin_addr, &d->request.dest_addr,
+        //            sizeof(d->request.dest_addr.ipv4));
+        //     ret = request_connect(key, d);
+        //     break;
+        // }
+        // case socks_req_addrtype_ipv6:
+        // {
+        //     ATTACHMENT(key)->origin_domain = AF_INET6;
+        //     d->request.dest_addr.ipv6.sin6_port = d->request.dest_port;
+        //     ATTACHMENT(key)->origin_addr_len =
+        //         sizeof(d->request.dest_addr.ipv6);
+        //     memcpy(&ATTACHMENT(key)->origin_addr, &d->request.dest_addr,
+        //            sizeof(d->request.dest_addr.ipv6));
+        //     ret = request_connect(key, d);
+        //     break;
+        // }
+        // case socks_req_addrtype_domain:
+        // {
+        //     struct selector_key *k = malloc(sizeof(*key));
+        //     if (k == NULL)
+        //     {
+        //         ret = REQUEST_WRITE;
+        //         d->status = status_general_SOCKS_server_failure;
+        //         selector_set_interest_key(key, OP_WRITE);
+        //     }
+        //     else
+        //     {
+        //         memcpy(k, key, sizeof(*k));
+        //         if (-1 == pthread_create(&tid, 0,
+        //                                  request_resolv_blocking, k))
+        //         {
+        //             ret = REQUEST_WRITE;
+        //             d->status = status_general_SOCKS_server_failure;
+        //             selector_set_interest_key(key, OP_WRITE);
+        //         }
+        //         else
+        //         {
+        //             ret = REQUEST_RESOLV;
+        //             selector_set_interest_key(key, OP_NOOP);
+        //         }
+        //     }
+        //     break;
+        // }
+        // default:
+        // {
+        //     ret = REQUEST_WRITE;
+        //     d->status = status_address_type_not_supported;
+        //     selector_set_interest_key(key, OP_WRITE);
+        // }
+        // }
         break;
     case http_method_HEAD:
     case http_method_POST:
@@ -549,8 +556,8 @@ request_resolv_blocking(void *data)
     snprintf(buff, sizeof(buff), "%d",
              ntohs(s->client.request.request.dest_port));
 
-    getaddrinfo(s->client.request.request.dest_addr.fqdn, buff, &hints,
-                &s->origin_resolution);
+    // getaddrinfo(s->client.request.request.dest_addr.fqdn, buff, &hints,
+    //             &s->origin_resolution);
 
     selector_notify_block(key->s, key->fd);
 

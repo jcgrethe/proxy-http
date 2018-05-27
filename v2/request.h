@@ -8,6 +8,8 @@
 #include "buffer.h"
 #include "parser_utils.h"
 
+#define MAX_REQUEST_TARGET_SIZE 8000
+
 enum http_method {
     http_method_GET,
     http_method_POST,
@@ -28,13 +30,14 @@ union socks_addr {
 
 struct request {
 
-    /** http **/
     enum http_method method;
 
-    enum  socks_addr_type dest_addr_type;
-    union socks_addr      dest_addr;
+    char request_target[MAX_REQUEST_TARGET_SIZE + 1];
+    char * host;
+    uint16_t * port;
+
     /** port in network byte order */
-    in_port_t             dest_port;
+    in_port_t dest_port;
 };
 
 enum request_state {
@@ -61,18 +64,18 @@ enum request_state {
    request_error_unsupported_method,
    request_error_unsupported_http_version,
    request_error_unsupported_version,
+   request_error_too_long_request_target,
 
 };
 
 struct request_parser {
    struct request *request;
    enum request_state state;
-   /** cuantos bytes tenemos que leer*/
-   uint8_t n;
+
    /** cuantos bytes ya leimos */
    uint8_t i;
 
-   /** http parser for method, http version, etc **/
+   /** http parser for method, http version **/
    struct parser * http_sub_parser;
 };
 

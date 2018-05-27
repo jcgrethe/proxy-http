@@ -3,19 +3,11 @@
  */
 #include <string.h> // memset
 #include <arpa/inet.h>
+#include <stdlib.h> // strtol
+#include <regex.h>
+#include <errno.h>
 
 #include "request.h"
-
-static void
-remaining_set(struct request_parser* p, const int n) {
-    p->i = 0;
-    p->n = n;
-}
-
-static int
-remaining_is_done(struct request_parser* p) {
-    return p->i >= p->n;
-}
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -88,28 +80,92 @@ method(const uint8_t c, struct request_parser* p) {
     return next;
 }
 
+int saveHostAndPort(struct request * req, char * URI_reference)
+{
+    // char * URI_reference = "http://www.ics.uci.edu/pub/ietf/uri/#Related";
+    // char * URI_reference2 = "foo://example.com:8042/over/there?name=ferret#nose";
+    char * regexString = "^(([^:/?#]+):)?(//([^/?#]*))?([^?#]*)(\\?([^#]*))?(#(.*))?";
+    size_t maxMatches = 1;
+    size_t maxGroups = 10;
+    
+    regex_t regexCompiled;
+    regmatch_t groupArray[maxGroups];
+    char * cursor;  
+    if (regcomp(&regexCompiled, regexString, REG_EXTENDED)) {
+        return -1;
+    };  
+
+    cursor = URI_reference;
+    for (int i = 0; i < maxMatches; i++) {
+        regexec(&regexCompiled, cursor, maxGroups, groupArray, 0);
+        
+        unsigned int offset = 0;
+
+        for (int g = 0; g < maxGroups; g++) { 
+            if (g == 0)
+                offset = groupArray[g].rm_eo; 
+
+            char cursorCopy[strlen(cursor) + 1];
+            strcpy(cursorCopy, cursor);
+            cursorCopy[groupArray[g].rm_eo] = 0;
+
+            // Authority is the 4th group
+            if(g == 4) {
+                char *authority;
+
+                authority = strdup(cursorCopy + groupArray[g].rm_so);
+
+                req->host = strsep(&authority,":");
+
+                char * port = strsep(&authority,"");
+
+                char *endptr;
+                errno = 0;
+                long val = strtol(port, &endptr, 10);
+                if (errno || endptr == port || *endptr != '\0' || val < 0 || val >= 0x10000) {
+                    return 1;
+                }
+                *req->port = (uint16_t)val;
+
+                free(authority);
+                   
+            }
+          
+        }
+        cursor += offset;
+    }
+
+    regfree(&regexCompiled);    
+    return 0;
+}
+
 // Based on 5.3.2. absolute-form of RFC 7230
 static enum request_state
 target(const uint8_t c, struct request_parser* p) {
     enum request_state next;
 
-    switch (parser_feed(p->http_sub_parser, c)->type) {
-        case STRING_CMP_MAYEQ:
-            next = request_method;
-            break;
-        case STRING_CMP_EQ:
-            next = request_target;
+    if(c == ' ') {
+        // Request-target is over after single space
+        ((uint8_t *)&(p->request->request_target))[MAX_REQUEST_TARGET_SIZE] = '\0';
+        p->i++;
+ 
+        if(saveHostAndPort(p->request, p->request->request_target)){
+            next = request_error;
+        } else {
 
-            //TODO: check this returns expected (GET, HEAD or POST)
-            p->request->method = p->http_sub_parser->state;
+            next = request_HTTP_version;
 
-            break;
-        case STRING_CMP_NEQ:
-        default:
-            next = request_error_unsupported_method;
-            break;
+        }
+        return next;
+    } 
+
+    if(p->i == (uint8_t)MAX_REQUEST_TARGET_SIZE) {
+        next = request_error_too_long_request_target;
+        return next;
     }
 
+    ((uint8_t *)&(p->request->request_target))[p->i++] = c;
+    next = request_target;
     return next;
 }
 
@@ -174,61 +230,14 @@ single_space(const uint8_t c, struct request_parser* p) {
     return next;
 }
 
-static enum request_state
-dstaddr_fqdn(const uint8_t c, struct request_parser* p) {
-    remaining_set(p, c);
-    p->request->dest_addr.fqdn[p->n - 1] = 0;
-
-    return request_dstaddr;
-}
-
-static enum request_state
-dstaddr(const uint8_t c, struct request_parser* p) {
-    enum request_state next;
-
-    switch (p->request->dest_addr_type) {
-        case socks_req_addrtype_ipv4:
-            ((uint8_t *)&(p->request->dest_addr.ipv4.sin_addr))[p->i++] = c;
-            break;
-        case socks_req_addrtype_ipv6:
-            ((uint8_t *)&(p->request->dest_addr.ipv6.sin6_addr))[p->i++] = c;
-            break;
-        case socks_req_addrtype_domain:
-            p->request->dest_addr.fqdn[p->i++] = c;
-            break;
-        }
-    if (remaining_is_done(p)) {
-        remaining_set(p, 2);
-        p->request->dest_port = 0;
-        next = request_dstport;
-    } else {
-        next = request_dstaddr;
-    }
-
-    return next;
-}
-
-static enum request_state
-dstport(const uint8_t c, struct request_parser* p) {
-    enum request_state next;
-    *(((uint8_t *) &(p->request->dest_port)) + p->i) = c;
-    p->i++;
-    next = request_dstport;
-    if (p->i >= p->n) {
-        next = request_done;
-    }
-    return next;
-}
-
 extern void
-request_parser_init (struct request_parser* p) {
+request_parser_init(struct request_parser* p) {
     p->state = request_method;
     memset(p->request, 0, sizeof(*(p->request)));
 }
 
-
 extern enum request_state 
-request_parser_feed (struct request_parser* p, const uint8_t c) {
+request_parser_feed(struct request_parser* p, const uint8_t c) {
     enum request_state next;
 
     switch(p->state) {
@@ -247,18 +256,10 @@ request_parser_feed (struct request_parser* p, const uint8_t c) {
         case request_CRLF:
             // next = atyp(c, p);
             break;
-        case request_dstaddr_fqdn:
-            next = dstaddr_fqdn(c, p);
-            break;
-        case  request_dstaddr:
-            next = dstaddr(c, p);
-            break;
-        case request_dstport:
-            next = dstport(c, p);
-            break;
         case request_done:
         case request_error:
         case request_error_unsupported_version:
+        case request_error_too_long_request_target:
             next = p->state;
             break;
         default:
@@ -319,52 +320,51 @@ request_marshall(buffer *b,
     return 10;
 }
 
-enum socks_response_status
-cmd_resolve(struct request* request,  struct sockaddr **originaddr,
-            socklen_t *originlen, int *domain) {
-    enum socks_response_status ret = status_general_SOCKS_server_failure;
+// enum socks_response_status
+// cmd_resolve(struct request* request,  struct sockaddr **originaddr,
+//             socklen_t *originlen, int *domain) {
+//     enum socks_response_status ret = status_general_SOCKS_server_failure;
 
-    *domain                  = AF_INET;
-    struct sockaddr *addr    = 0x00;
-    socklen_t        addrlen = 0;
+//     *domain                  = AF_INET;
+//     struct sockaddr *addr    = 0x00;
+//     socklen_t        addrlen = 0;
 
-    switch (request->dest_addr_type) {
-        case socks_req_addrtype_domain: {
-            struct hostent *hp = gethostbyname(request->dest_addr.fqdn);
-            if (hp == 0) {
-                memset(&request->dest_addr, 0x00,
-                                       sizeof(request->dest_addr));
-                break;
-            } 
-            request->dest_addr.ipv4.sin_family = hp->h_addrtype;
-            memcpy((char *)&request->dest_addr.ipv4.sin_addr,
-                   *hp->h_addr_list, hp->h_length);
+//     switch (request->dest_addr_type) {
+//         case socks_req_addrtype_domain: {
+//             struct hostent *hp = gethostbyname(request->dest_addr.fqdn);
+//             if (hp == 0) {
+//                 memset(&request->dest_addr, 0x00,
+//                                        sizeof(request->dest_addr));
+//                 break;
+//             } 
+//             request->dest_addr.ipv4.sin_family = hp->h_addrtype;
+//             memcpy((char *)&request->dest_addr.ipv4.sin_addr,
+//                    *hp->h_addr_list, hp->h_length);
             
-        }
-        /* no break */
-        case socks_req_addrtype_ipv4:
-            *domain  = AF_INET;
-            addr    = (struct sockaddr *)&(request->dest_addr.ipv4);
-            addrlen = sizeof(request->dest_addr.ipv4);
-            request->dest_addr.ipv4.sin_port = request->dest_port;
-            break;
-        case socks_req_addrtype_ipv6:
-            *domain  = AF_INET6;
-            addr    = (struct sockaddr *)&(request->dest_addr.ipv6);
-            addrlen = sizeof(request->dest_addr.ipv6);
-            request->dest_addr.ipv6.sin6_port = request->dest_port;
-            break;
-        default:
-            return status_address_type_not_supported;
-    }
+//         }
+//         /* no break */
+//         case socks_req_addrtype_ipv4:
+//             *domain  = AF_INET;
+//             addr    = (struct sockaddr *)&(request->dest_addr.ipv4);
+//             addrlen = sizeof(request->dest_addr.ipv4);
+//             request->dest_addr.ipv4.sin_port = request->dest_port;
+//             break;
+//         case socks_req_addrtype_ipv6:
+//             *domain  = AF_INET6;
+//             addr    = (struct sockaddr *)&(request->dest_addr.ipv6);
+//             addrlen = sizeof(request->dest_addr.ipv6);
+//             request->dest_addr.ipv6.sin6_port = request->dest_port;
+//             break;
+//         default:
+//             return status_address_type_not_supported;
+//     }
 
-    *originaddr = addr;
-    *originlen  = addrlen;
+//     *originaddr = addr;
+//     *originlen  = addrlen;
 
-    return ret;
-}
+//     return ret;
+// }
 
-#include <errno.h>
 
 enum socks_response_status
 errno_to_socks(const int e) {
