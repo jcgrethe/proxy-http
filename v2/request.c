@@ -12,154 +12,180 @@
 //////////////////////////////////////////////////////////////////////////////
 
 static enum request_state
-method(const uint8_t c, struct request_parser* p) {
+method(const uint8_t c, struct request_parser *p)
+{
     enum request_state next;
 
     // If the parser has NULL for method sub_parser, then instantiate it
     // else, use it and control return of feeding a byte.
-    if(p->http_sub_parser == NULL) {
+    if (p->http_sub_parser == NULL)
+    {
         struct parser_definition d;
 
-        switch(c) {
-            case 'G':
-                d = parser_utils_strcmpi("GET");
-                break;
-            case 'H':
-                d = parser_utils_strcmpi("HEAD");
-                break;
-            case 'P':
-                d = parser_utils_strcmpi("POST");
-                break;
-            default:
+        switch (c)
+        {
+        case 'G':
+            d = parser_utils_strcmpi("GET");
+            break;
+        case 'H':
+            d = parser_utils_strcmpi("HEAD");
+            break;
+        case 'P':
+            d = parser_utils_strcmpi("POST");
+            break;
+        default:
             p->state = request_error_unsupported_method;
             break;
         }
 
-        if(p->state != request_error_unsupported_method) {
+        if (p->state != request_error_unsupported_method)
+        {
             p->http_sub_parser = parser_init(parser_no_classes(), &d);
-        } else {
+        }
+        else
+        {
             return p->state = next;
         }
-        
     }
 
-    switch (parser_feed(p->http_sub_parser, c)->type) {
-        case STRING_CMP_MAYEQ:
+    switch (parser_feed(p->http_sub_parser, c)->type)
+    {
+    case STRING_CMP_MAYEQ:
 
-            // Method is case-sensitive. Should always be CAPS.
-            if(c >= 'a' && c <= 'z') {
-                next = request_error_unsupported_method;
-            } else {
-                next = request_method;
-            }
-
-            break;
-        case STRING_CMP_EQ:
-
-            // Method is case-sensitive. Should always be CAPS.
-            if(c >= 'a' && c <= 'z') {
-                next = request_error_unsupported_method;
-            } else {
-                next = request_SP;;
-            }
-
-            //TODO: check this returns expected (GET, HEAD or POST)
-            p->request->method = p->http_sub_parser->state;
-
-            break;
-        case STRING_CMP_NEQ:
-        default:
-            // TODO: this can fail / start
-            parser_utils_strcmpi_destroy(p->http_sub_parser->def);
-            parser_destroy(p->http_sub_parser);
-            // TODO: this can fail / end
+        // Method is case-sensitive. Should always be CAPS.
+        if (c >= 'a' && c <= 'z')
+        {
             next = request_error_unsupported_method;
-            break;
+        }
+        else
+        {
+            next = request_method;
+        }
+
+        break;
+    case STRING_CMP_EQ:
+
+        // Method is case-sensitive. Should always be CAPS.
+        if (c >= 'a' && c <= 'z')
+        {
+            next = request_error_unsupported_method;
+        }
+        else
+        {
+            next = request_SP;
+        }
+
+        //TODO: check this returns expected (GET, HEAD or POST)
+        p->request->method = p->http_sub_parser->state;
+
+        break;
+    case STRING_CMP_NEQ:
+    default:
+        // TODO: this can fail / start
+        parser_utils_strcmpi_destroy(p->http_sub_parser->def);
+        parser_destroy(p->http_sub_parser);
+        // TODO: this can fail / end
+        next = request_error_unsupported_method;
+        break;
     }
 
     return next;
 }
 
-int saveHostAndPort(struct request * req, char * URI_reference)
+// When host is not empty, the proxy must ignore the following Host field.
+int retrieveHostAndPort(struct request *req, char *URI_reference)
 {
     // char * URI_reference = "http://www.ics.uci.edu/pub/ietf/uri/#Related";
     // char * URI_reference2 = "foo://example.com:8042/over/there?name=ferret#nose";
-    char * regexString = "^(([^:/?#]+):)?(//([^/?#]*))?([^?#]*)(\\?([^#]*))?(#(.*))?";
+    // char * URI_reference3 = "/over/there";
+    char *regexString = "^(([^:/?#]+):)?(//([^/?#]*))?([^?#]*)(\\?([^#]*))?(#(.*))?";
     size_t maxMatches = 1;
     size_t maxGroups = 10;
-    
+
     regex_t regexCompiled;
     regmatch_t groupArray[maxGroups];
-    char * cursor;  
-    if (regcomp(&regexCompiled, regexString, REG_EXTENDED)) {
+    char *cursor;
+    if (regcomp(&regexCompiled, regexString, REG_EXTENDED))
+    {
         return -1;
-    };  
+    };
 
     cursor = URI_reference;
-    for (int i = 0; i < maxMatches; i++) {
+    for (int i = 0; i < maxMatches; i++)
+    {
         regexec(&regexCompiled, cursor, maxGroups, groupArray, 0);
-        
+
         unsigned int offset = 0;
 
-        for (int g = 0; g < maxGroups; g++) { 
+        for (int g = 0; g < maxGroups; g++)
+        {
             if (g == 0)
-                offset = groupArray[g].rm_eo; 
+                offset = groupArray[g].rm_eo;
 
             char cursorCopy[strlen(cursor) + 1];
             strcpy(cursorCopy, cursor);
             cursorCopy[groupArray[g].rm_eo] = 0;
 
             // Authority is the 4th group
-            if(g == 4) {
+            if (g == 4 && strlen(cursorCopy + groupArray[g].rm_so) != 0)
+            {
                 char *authority;
-
                 authority = strdup(cursorCopy + groupArray[g].rm_so);
 
-                req->host = strsep(&authority,":");
+                req->host = strsep(&authority, ":");
 
-                char * port = strsep(&authority,"");
+                char *port = strsep(&authority, "");
 
-                char *endptr;
-                errno = 0;
-                long val = strtol(port, &endptr, 10);
-                if (errno || endptr == port || *endptr != '\0' || val < 0 || val >= 0x10000) {
-                    return 1;
+                if (port != NULL)
+                {
+                    char *endptr;
+                    errno = 0;
+                    long val = strtol(port, &endptr, 10);
+                    if (errno || endptr == port || *endptr != '\0' || val < 0 || val >= 0x10000)
+                    {
+                        return 1;
+                    }
+                    req->port = (uint16_t)val;
                 }
-                *req->port = (uint16_t)val;
 
                 free(authority);
-                   
             }
-          
         }
         cursor += offset;
     }
 
-    regfree(&regexCompiled);    
+    regfree(&regexCompiled);
     return 0;
 }
 
 // Based on 5.3.2. absolute-form of RFC 7230
+// Accumulate request target upto single space.
+// Then retrieve host and port.
 static enum request_state
-target(const uint8_t c, struct request_parser* p) {
+target(const uint8_t c, struct request_parser *p)
+{
     enum request_state next;
 
-    if(c == ' ') {
+    if (c == ' ')
+    {
         // Request-target is over after single space
         ((uint8_t *)&(p->request->request_target))[MAX_REQUEST_TARGET_SIZE] = '\0';
         p->i++;
- 
-        if(saveHostAndPort(p->request, p->request->request_target)){
+
+        if (retrieveHostAndPort(p->request, p->request->request_target))
+        {
             next = request_error;
-        } else {
-
-            next = request_HTTP_version;
-
         }
-        return next;
-    } 
+        else
+        {
+            next = request_SP;
+        }
 
-    if(p->i == (uint8_t)MAX_REQUEST_TARGET_SIZE) {
+        return next;
+    }
+
+    if (p->i == (uint8_t)MAX_REQUEST_TARGET_SIZE)
+    {
         next = request_error_too_long_request_target;
         return next;
     }
@@ -170,139 +196,229 @@ target(const uint8_t c, struct request_parser* p) {
 }
 
 static enum request_state
-HTTP_version(const uint8_t c, struct request_parser* p) {
+HTTP_version(const uint8_t c, struct request_parser *p)
+{
     enum request_state next;
 
     // The parser should be NULL after method sub parser destruction.
-    if(p->http_sub_parser == NULL) {
+    if (p->http_sub_parser == NULL)
+    {
         struct parser_definition d = parser_utils_strcmpi("HTTP/1.1");
         p->http_sub_parser = parser_init(parser_no_classes(), &d);
     }
 
-    switch (parser_feed(p->http_sub_parser, c)->type) {
-        case STRING_CMP_MAYEQ:
-            // HTTP version is case-sensitive. Should always be CAPS.
-            if(c >= 'a' && c <= 'z') {
-                next = request_error_unsupported_http_version;
-            } else {
-                next = request_HTTP_version;
-            }
-            break;
-        case STRING_CMP_EQ:
-            next = request_SP;
-            break;
-        case STRING_CMP_NEQ:
-        default:
-            // TODO: this can fail / start
-            parser_utils_strcmpi_destroy(p->http_sub_parser->def);
-            parser_destroy(p->http_sub_parser);
-            // TODO: this can fail / end
-            next = request_error_unsupported_method;
-            break;
+    switch (parser_feed(p->http_sub_parser, c)->type)
+    {
+    case STRING_CMP_MAYEQ:
+        // HTTP version is case-sensitive. Should always be CAPS.
+        if (c >= 'a' && c <= 'z')
+        {
+            next = request_error_unsupported_http_version;
+        }
+        else
+        {
+            next = request_HTTP_version;
+        }
+        break;
+    case STRING_CMP_EQ:
+        next = request_CRLF;
+        break;
+    case STRING_CMP_NEQ:
+    default:
+        // TODO: this can fail / start
+        parser_utils_strcmpi_destroy(p->http_sub_parser->def);
+        parser_destroy(p->http_sub_parser);
+        // TODO: this can fail / end
+        next = request_error_unsupported_method;
+        break;
     }
 
     return next;
 }
 
 static enum request_state
-single_space(const uint8_t c, struct request_parser* p) {
+single_space(const uint8_t c, struct request_parser *p)
+{
     enum request_state next;
 
-    if(c != ' ') {
+    if (c != ' ')
+    {
         next = request_error;
-    } else {
-        switch(p->state) {
-            case request_method:
-                next = request_target;
-                break;
-            case request_target:
-                next = request_HTTP_version;
-                break;
-            case request_HTTP_version:
-                next = request_CRLF;
-                break;
-            default:
-                next = request_error;
-                break;
+    }
+    else
+    {
+        switch (p->state)
+        {
+        case request_method:
+            next = request_target;
+            break;
+        case request_target:
+            next = request_HTTP_version;
+            break;
+        default:
+            next = request_error;
+            break;
         }
     }
 
     return next;
 }
 
+static enum request_state
+CRLF(const uint8_t c, struct request_parser *p)
+{
+    enum request_state next;
+
+    // The parser should be NULL after method sub parser destruction.
+    if (p->http_sub_parser == NULL)
+    {
+        struct parser_definition d = parser_utils_strcmpi("\r\n");
+        p->http_sub_parser = parser_init(parser_no_classes(), &d);
+    }
+
+    switch (parser_feed(p->http_sub_parser, c)->type)
+    {
+    case STRING_CMP_MAYEQ:
+        next = request_CRLF;
+        break;
+    case STRING_CMP_EQ:
+        next = request_field_name;
+        break;
+    case STRING_CMP_NEQ:
+    default:
+        // TODO: this can fail / start
+        parser_utils_strcmpi_destroy(p->http_sub_parser->def);
+        parser_destroy(p->http_sub_parser);
+        // TODO: this can fail / end
+        next = request_error_CRLF_not_found;
+        break;
+    }
+
+    return next;
+}
+
+static enum request_state
+header_field_name(const uint8_t c, struct request_parser *p)
+{
+    enum request_state next;
+
+    if (c == ' ')
+    {
+        // Request-target is over after single space
+        ((uint8_t *)&(p->request->request_target))[MAX_REQUEST_TARGET_SIZE] = '\0';
+        p->i++;
+
+        if (retrieveHostAndPort(p->request, p->request->request_target))
+        {
+            next = request_error;
+        }
+        else
+        {
+            next = request_SP;
+        }
+
+        return next;
+    }
+
+    if (p->i == (uint8_t)MAX_REQUEST_TARGET_SIZE)
+    {
+        next = request_error_too_long_request_target;
+        return next;
+    }
+
+    ((uint8_t *)&(p->request->request_target))[p->i++] = c;
+    next = request_target;
+    return next;
+}
+
 extern void
-request_parser_init(struct request_parser* p) {
+request_parser_init(struct request_parser *p)
+{
     p->state = request_method;
     memset(p->request, 0, sizeof(*(p->request)));
 }
 
-extern enum request_state 
-request_parser_feed(struct request_parser* p, const uint8_t c) {
+//TODO: check whether case request_some_error is okay
+extern enum request_state
+request_parser_feed(struct request_parser *p, const uint8_t c)
+{
     enum request_state next;
 
-    switch(p->state) {
-        case request_method:
-            next = method(c, p);
-            break;
-        case request_target:
-            next = target(c, p);
-            break;
-        case request_HTTP_version:
-            next = HTTP_version(c, p);
-            break;
-        case request_SP:
-            next = single_space(c, p);
-            break;
-        case request_CRLF:
-            // next = atyp(c, p);
-            break;
-        case request_done:
-        case request_error:
-        case request_error_unsupported_version:
-        case request_error_too_long_request_target:
-            next = p->state;
-            break;
-        default:
-            next = request_error;
-            break;
+    switch (p->state)
+    {
+    case request_method:
+        next = method(c, p);
+        break;
+    case request_target:
+        next = target(c, p);
+        break;
+    case request_HTTP_version:
+        next = HTTP_version(c, p);
+        break;
+    case request_SP:
+        next = single_space(c, p);
+        break;
+    case request_CRLF:
+        next = CRLF(c, p);
+        break;
+    case request_field_name:
+        next = header_field_name(c, p);
+        break;
+    case request_done:
+    case request_error:
+    case request_error_unsupported_version:
+    case request_error_too_long_request_target:
+        next = p->state;
+        break;
+    default:
+        next = request_error;
+        break;
     }
 
     return p->state = next;
 }
 
-extern bool 
-request_is_done(const enum request_state st, bool *errored) {
-    if(st >= request_error && errored != 0) {
+extern bool
+request_is_done(const enum request_state st, bool *errored)
+{
+    if (st >= request_error && errored != 0)
+    {
         *errored = true;
     }
     return st >= request_done;
 }
 
 extern enum request_state
-request_consume(buffer *b, struct request_parser *p, bool *errored) {
+request_consume(buffer *b, struct request_parser *p, bool *errored)
+{
     enum request_state st = p->state;
 
-    while(buffer_can_read(b)) {
-       const uint8_t c = buffer_read(b);
-       st = request_parser_feed(p, c);
-       if(request_is_done(st, errored)) {
-          break;
-       }
+    while (buffer_can_read(b))
+    {
+        const uint8_t c = buffer_read(b);
+        st = request_parser_feed(p, c);
+        if (request_is_done(st, errored))
+        {
+            break;
+        }
     }
     return st;
 }
 
 extern void
-request_close(struct request_parser *p) {
+request_close(struct request_parser *p)
+{
     // nada que hacer
 }
 
 extern int
 request_marshall(buffer *b,
-                 const enum socks_response_status status) {
-     size_t  n;
+                 const enum socks_response_status status)
+{
+    size_t n;
     uint8_t *buff = buffer_write_ptr(b, &n);
-    if(n < 10) {
+    if (n < 10)
+    {
         return -1;
     }
     buff[0] = 0x05;
@@ -336,11 +452,11 @@ request_marshall(buffer *b,
 //                 memset(&request->dest_addr, 0x00,
 //                                        sizeof(request->dest_addr));
 //                 break;
-//             } 
+//             }
 //             request->dest_addr.ipv4.sin_family = hp->h_addrtype;
 //             memcpy((char *)&request->dest_addr.ipv4.sin_addr,
 //                    *hp->h_addr_list, hp->h_length);
-            
+
 //         }
 //         /* no break */
 //         case socks_req_addrtype_ipv4:
@@ -365,26 +481,27 @@ request_marshall(buffer *b,
 //     return ret;
 // }
 
-
 enum socks_response_status
-errno_to_socks(const int e) {
+errno_to_socks(const int e)
+{
     enum socks_response_status ret = status_general_SOCKS_server_failure;
-    switch (e) {
-        case 0:
-            ret = status_succeeded;
-            break;
-        case ECONNREFUSED:
-            ret = status_connection_refused;
-            break;
-        case EHOSTUNREACH:
-            ret = status_host_unreachable;
-            break;
-        case ENETUNREACH:
-            ret = status_network_unreachable;
-            break;
-        case ETIMEDOUT:
-            ret = status_ttl_expired;
-            break;
+    switch (e)
+    {
+    case 0:
+        ret = status_succeeded;
+        break;
+    case ECONNREFUSED:
+        ret = status_connection_refused;
+        break;
+    case EHOSTUNREACH:
+        ret = status_host_unreachable;
+        break;
+    case ENETUNREACH:
+        ret = status_network_unreachable;
+        break;
+    case ETIMEDOUT:
+        ret = status_ttl_expired;
+        break;
     }
     return ret;
 }

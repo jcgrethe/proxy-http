@@ -21,7 +21,7 @@
 
 #define N(x) (sizeof(x) / sizeof((x)[0]))
 
-#define BUFFER_SIZE 1024*8
+#define BUFFER_SIZE 1024 * 8
 
 /** maquina de estados general */
 enum http_state
@@ -207,7 +207,7 @@ struct http
 
 static const unsigned max_pool = 50; // tamaño máximo
 static unsigned pool_size = 0;       // tamaño actual
-static struct http *pool = 0;      // pool propiamente dicho
+static struct http *pool = 0;        // pool propiamente dicho
 
 static const struct state_definition *
 http_describe_states(void);
@@ -386,6 +386,8 @@ request_init(const unsigned state, struct selector_key *key)
     d->origin_addr = &ATTACHMENT(key)->origin_addr;
     d->origin_addr_len = &ATTACHMENT(key)->origin_addr_len;
     d->origin_domain = &ATTACHMENT(key)->origin_domain;
+
+    d->request.port = (uint16_t) 80;
 }
 
 static unsigned
@@ -450,13 +452,6 @@ request_process(struct selector_key *key, struct request_st *d)
     case http_method_GET:
         // esto mejoraría enormemente de haber usado
         // sockaddr_storage en el request
-
-
-
-
-
-
-
 
         // switch (d->request.dest_addr_type)
         // {
