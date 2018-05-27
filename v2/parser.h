@@ -50,14 +50,14 @@ static const unsigned ANY = 1 << 9;
 struct parser_definition
 {
     /** cantidad de estados */
-    const unsigned states_count;
+    unsigned states_count;
     /** por cada estado, sus transiciones */
-    const struct parser_state_transition **states;
+    struct parser_state_transition **states;
     /** cantidad de estados por transición */
-    const size_t *states_n;
+    size_t *states_n;
 
     /** estado inicial */
-    const unsigned start_state;
+    unsigned start_state;
 };
 
 /* CDT del parser */
