@@ -447,9 +447,14 @@ request_process(struct selector_key *key, struct request_st *d)
     unsigned ret;
     pthread_t tid;
 
+    printf("Llegó request_process\n");
+
+    printf("Llegó d->request.method: %d\n", d->request.method);
+
     switch (d->request.method)
     {
     case http_method_GET:
+        printf("Llegó GET\n");
         // esto mejoraría enormemente de haber usado
         // sockaddr_storage en el request
 
@@ -515,6 +520,8 @@ request_process(struct selector_key *key, struct request_st *d)
     case http_method_HEAD:
     case http_method_POST:
     default:
+        printf("Llegó request_process default\n");
+
         d->status = status_command_not_supported;
         ret = REQUEST_WRITE;
         break;

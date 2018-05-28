@@ -9,6 +9,7 @@
 #include "parser_utils.h"
 
 #define MAX_REQUEST_TARGET_SIZE 8000
+#define MAX_HEADER_FIELD_NAME_SIZE 256
 
 enum http_method
 {
@@ -32,10 +33,8 @@ union socks_addr {
 
 struct request
 {
-
     enum http_method method;
 
-    char request_target[MAX_REQUEST_TARGET_SIZE + 1];
     char *host;
     uint16_t port;
 
@@ -52,8 +51,8 @@ enum request_state
     request_SP,
     request_CRLF,
 
-    request_field_name,
-    request_field_value,
+    request_header_field_name,
+    request_header_field_value,
 
     request_dstaddr_fqdn,
     request_dstaddr,
@@ -76,6 +75,9 @@ struct request_parser
 {
     struct request *request;
     enum request_state state;
+
+    char request_target[MAX_REQUEST_TARGET_SIZE + 1];
+    char header_field_name[MAX_HEADER_FIELD_NAME_SIZE + 1];
 
     /** cuantos bytes ya leimos */
     uint8_t i;

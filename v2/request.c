@@ -6,6 +6,7 @@
 #include <stdlib.h> // strtol
 #include <regex.h>
 #include <errno.h>
+#include <ctype.h> // isdigit, isalpha
 
 #include "request.h"
 
@@ -26,12 +27,15 @@ method(const uint8_t c, struct request_parser *p)
         {
         case 'G':
             d = parser_utils_strcmpi("GET");
+            p->request->method = http_method_GET;
             break;
         case 'H':
             d = parser_utils_strcmpi("HEAD");
+            p->request->method = http_method_HEAD;
             break;
         case 'P':
             d = parser_utils_strcmpi("POST");
+            p->request->method = http_method_POST;
             break;
         default:
             p->state = request_error_unsupported_method;
@@ -56,6 +60,7 @@ method(const uint8_t c, struct request_parser *p)
         if (c >= 'a' && c <= 'z')
         {
             next = request_error_unsupported_method;
+            p->request->method = -1;
         }
         else
         {
@@ -69,14 +74,17 @@ method(const uint8_t c, struct request_parser *p)
         if (c >= 'a' && c <= 'z')
         {
             next = request_error_unsupported_method;
+            p->request->method = -1;
         }
         else
         {
+            printf("Acá debería guardar GET\n");
+            printf("p->request->method: %d\n", p->request->method);
+
+            parser_utils_strcmpi_destroy(p->http_sub_parser->def);
+            parser_destroy(p->http_sub_parser);
             next = request_SP;
         }
-
-        //TODO: check this returns expected (GET, HEAD or POST)
-        p->request->method = p->http_sub_parser->state;
 
         break;
     case STRING_CMP_NEQ:
@@ -86,6 +94,7 @@ method(const uint8_t c, struct request_parser *p)
         parser_destroy(p->http_sub_parser);
         // TODO: this can fail / end
         next = request_error_unsupported_method;
+        p->request->method = -1;
         break;
     }
 
@@ -129,8 +138,7 @@ int retrieveHostAndPort(struct request *req, char *URI_reference)
             // Authority is the 4th group
             if (g == 4 && strlen(cursorCopy + groupArray[g].rm_so) != 0)
             {
-                char *authority;
-                authority = strdup(cursorCopy + groupArray[g].rm_so);
+                char *authority = strdup(cursorCopy + groupArray[g].rm_so);
 
                 req->host = strsep(&authority, ":");
 
@@ -169,10 +177,10 @@ target(const uint8_t c, struct request_parser *p)
     if (c == ' ')
     {
         // Request-target is over after single space
-        ((uint8_t *)&(p->request->request_target))[MAX_REQUEST_TARGET_SIZE] = '\0';
+        ((uint8_t *)&(p->request_target))[MAX_REQUEST_TARGET_SIZE] = '\0';
         p->i++;
 
-        if (retrieveHostAndPort(p->request, p->request->request_target))
+        if (retrieveHostAndPort(p->request, p->request_target))
         {
             next = request_error;
         }
@@ -181,16 +189,18 @@ target(const uint8_t c, struct request_parser *p)
             next = request_SP;
         }
 
+        p->i = 0;
         return next;
     }
 
     if (p->i == (uint8_t)MAX_REQUEST_TARGET_SIZE)
     {
         next = request_error_too_long_request_target;
+        p->i = 0;
         return next;
     }
 
-    ((uint8_t *)&(p->request->request_target))[p->i++] = c;
+    ((uint8_t *)&(p->request_target))[p->i++] = c;
     next = request_target;
     return next;
 }
@@ -221,6 +231,8 @@ HTTP_version(const uint8_t c, struct request_parser *p)
         }
         break;
     case STRING_CMP_EQ:
+        parser_utils_strcmpi_destroy(p->http_sub_parser->def);
+        parser_destroy(p->http_sub_parser);
         next = request_CRLF;
         break;
     case STRING_CMP_NEQ:
@@ -282,7 +294,10 @@ CRLF(const uint8_t c, struct request_parser *p)
         next = request_CRLF;
         break;
     case STRING_CMP_EQ:
-        next = request_field_name;
+        parser_utils_strcmpi_destroy(p->http_sub_parser->def);
+        parser_destroy(p->http_sub_parser);
+        // next = request_header_field_name;
+        next = request_done;
         break;
     case STRING_CMP_NEQ:
     default:
@@ -297,36 +312,50 @@ CRLF(const uint8_t c, struct request_parser *p)
     return next;
 }
 
+// HTTP 1.1 requires the Host field.
+
+// For now, it's only parsing Host header field.
 static enum request_state
 header_field_name(const uint8_t c, struct request_parser *p)
 {
     enum request_state next;
 
-    if (c == ' ')
+    // If CRLF is found, headers field are over and this is the Empty Line.
+
+    if (c == ':')
     {
-        // Request-target is over after single space
-        ((uint8_t *)&(p->request->request_target))[MAX_REQUEST_TARGET_SIZE] = '\0';
+        // Header field name is over after single space
+        ((uint8_t *)&(p->header_field_name))[MAX_HEADER_FIELD_NAME_SIZE] = '\0';
         p->i++;
 
-        if (retrieveHostAndPort(p->request, p->request->request_target))
-        {
-            next = request_error;
-        }
-        else
-        {
-            next = request_SP;
-        }
+        // if (strcmp(tolower(p->header_field_name),"host") == 0)
+        // {
+        //     if(p->request->host != NULL)
+        // }
+        // else
+        // {
+            next = request_header_field_value;
+        // }
 
         return next;
     }
 
-    if (p->i == (uint8_t)MAX_REQUEST_TARGET_SIZE)
+    if ((strchr("!#$%&'*+-.^_`|~", c) == NULL && !isdigit(c) && !isalpha(c)))
     {
-        next = request_error_too_long_request_target;
+        next = request_error;
+        p->i = 0;
         return next;
     }
 
-    ((uint8_t *)&(p->request->request_target))[p->i++] = c;
+    if (p->i == (uint8_t)MAX_HEADER_FIELD_NAME_SIZE)
+    {
+        //TODO: too long header field?
+        next = request_error;
+        p->i = 0;
+        return next;
+    }
+
+    ((uint8_t *)&(p->header_field_name))[p->i++] = c;
     next = request_target;
     return next;
 }
@@ -361,7 +390,7 @@ request_parser_feed(struct request_parser *p, const uint8_t c)
     case request_CRLF:
         next = CRLF(c, p);
         break;
-    case request_field_name:
+    case request_header_field_name:
         next = header_field_name(c, p);
         break;
     case request_done:
