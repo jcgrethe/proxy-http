@@ -7,6 +7,7 @@
 #include <regex.h>
 #include <errno.h>
 #include <ctype.h> // isdigit, isalpha
+#include <stdio.h>
 
 #include "request.h"
 
@@ -83,7 +84,8 @@ method(const uint8_t c, struct request_parser *p)
 
             parser_utils_strcmpi_destroy(p->http_sub_parser->def);
             parser_destroy(p->http_sub_parser);
-            next = request_SP;
+            next = request_SP_AFTER_METHOD;
+            p->http_sub_parser=NULL;
         }
 
         break;
@@ -186,7 +188,7 @@ target(const uint8_t c, struct request_parser *p)
         }
         else
         {
-            next = request_SP;
+            next = request_HTTP_version;
         }
 
         p->i = 0;
@@ -234,6 +236,7 @@ HTTP_version(const uint8_t c, struct request_parser *p)
         parser_utils_strcmpi_destroy(p->http_sub_parser->def);
         parser_destroy(p->http_sub_parser);
         next = request_CRLF;
+        p->http_sub_parser=NULL;
         break;
     case STRING_CMP_NEQ:
     default:
@@ -249,7 +252,7 @@ HTTP_version(const uint8_t c, struct request_parser *p)
 }
 
 static enum request_state
-single_space(const uint8_t c, struct request_parser *p)
+single_space(const uint8_t c, struct request_parser *p,enum request_state state)
 {
     enum request_state next;
 
@@ -259,17 +262,14 @@ single_space(const uint8_t c, struct request_parser *p)
     }
     else
     {
-        switch (p->state)
-        {
-        case request_method:
+        if(state==request_SP_AFTER_METHOD){
             next = request_target;
-            break;
-        case request_target:
-            next = request_HTTP_version;
-            break;
-        default:
-            next = request_error;
-            break;
+        }
+        else if(state==request_SP_AFTER_TARGET)
+        {
+            next=request_HTTP_version;
+        } else{
+            next=request_error;
         }
     }
 
@@ -296,8 +296,8 @@ CRLF(const uint8_t c, struct request_parser *p)
     case STRING_CMP_EQ:
         parser_utils_strcmpi_destroy(p->http_sub_parser->def);
         parser_destroy(p->http_sub_parser);
-        // next = request_header_field_name;
-        next = request_done;
+        next = request_header_field_name;
+        //next = request_done;
         break;
     case STRING_CMP_NEQ:
     default:
@@ -384,14 +384,17 @@ request_parser_feed(struct request_parser *p, const uint8_t c)
     case request_HTTP_version:
         next = HTTP_version(c, p);
         break;
-    case request_SP:
-        next = single_space(c, p);
+    case request_SP_AFTER_METHOD:
+        next = single_space(c, p,request_SP_AFTER_METHOD);
         break;
     case request_CRLF:
         next = CRLF(c, p);
         break;
     case request_header_field_name:
         next = header_field_name(c, p);
+        break;
+    case request_SP_AFTER_TARGET:
+        next = single_space(c, p,request_SP_AFTER_TARGET);
         break;
     case request_done:
     case request_error:

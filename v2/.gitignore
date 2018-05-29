@@ -1,6 +1,7 @@
 
 # Created by https://www.gitignore.io/api/c
-
+cmake-build-debug/*
+cmake-build-debug/
 ### C ###
 # Prerequisites
 *.d
@@ -57,3 +58,5 @@ dkms.conf
 
 
 # End of https://www.gitignore.io/api/c
+
+.vscode

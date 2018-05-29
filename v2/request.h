@@ -47,8 +47,9 @@ enum request_state
 
     request_method,
     request_target,
+    request_SP_AFTER_TARGET,
     request_HTTP_version,
-    request_SP,
+    request_SP_AFTER_METHOD,
     request_CRLF,
 
     request_header_field_name,
