@@ -13,99 +13,99 @@
 
 //////////////////////////////////////////////////////////////////////////////
 
+
 static enum request_state
-method(const uint8_t c, struct request_parser *p)
-{
+LF(const uint8_t c, struct request_parser *p) {
+
+
+    if (c == '\n') {
+
+        return request_header_field_name;
+
+    }
+
+    return request_error;
+}
+
+static enum request_state
+method(const uint8_t c, struct request_parser *p) {
     enum request_state next;
 
     // If the parser has NULL for method sub_parser, then instantiate it
     // else, use it and control return of feeding a byte.
-    if (p->http_sub_parser == NULL)
-    {
+    if (p->http_sub_parser == NULL) {
         struct parser_definition d;
 
-        switch (c)
-        {
-        case 'G':
-            d = parser_utils_strcmpi("GET");
-            p->request->method = http_method_GET;
-            break;
-        case 'H':
-            d = parser_utils_strcmpi("HEAD");
-            p->request->method = http_method_HEAD;
-            break;
-        case 'P':
-            d = parser_utils_strcmpi("POST");
-            p->request->method = http_method_POST;
-            break;
-        default:
-            p->state = request_error_unsupported_method;
-            break;
+        switch (c) {
+            case 'G':
+                d = parser_utils_strcmpi("GET");
+                p->request->method = http_method_GET;
+                break;
+            case 'H':
+                d = parser_utils_strcmpi("HEAD");
+                p->request->method = http_method_HEAD;
+                break;
+            case 'P':
+                d = parser_utils_strcmpi("POST");
+                p->request->method = http_method_POST;
+                break;
+            default:
+                p->state = request_error_unsupported_method;
+                break;
         }
 
-        if (p->state != request_error_unsupported_method)
-        {
+        if (p->state != request_error_unsupported_method) {
             p->http_sub_parser = parser_init(parser_no_classes(), &d);
-        }
-        else
-        {
+        } else {
             return p->state = next;
         }
     }
 
-    switch (parser_feed(p->http_sub_parser, c)->type)
-    {
-    case STRING_CMP_MAYEQ:
+    switch (parser_feed(p->http_sub_parser, c)->type) {
+        case STRING_CMP_MAYEQ:
 
-        // Method is case-sensitive. Should always be CAPS.
-        if (c >= 'a' && c <= 'z')
-        {
-            next = request_error_unsupported_method;
-            p->request->method = -1;
-        }
-        else
-        {
-            next = request_method;
-        }
+            // Method is case-sensitive. Should always be CAPS.
+            if (c >= 'a' && c <= 'z') {
+                next = request_error_unsupported_method;
+                p->request->method = -1;
+            } else {
+                next = request_method;
+            }
 
-        break;
-    case STRING_CMP_EQ:
+            break;
+        case STRING_CMP_EQ:
 
-        // Method is case-sensitive. Should always be CAPS.
-        if (c >= 'a' && c <= 'z')
-        {
-            next = request_error_unsupported_method;
-            p->request->method = -1;
-        }
-        else
-        {
-            printf("Acá debería guardar GET\n");
-            printf("p->request->method: %d\n", p->request->method);
+            // Method is case-sensitive. Should always be CAPS.
+            if (c >= 'a' && c <= 'z') {
+                next = request_error_unsupported_method;
+                p->request->method = -1;
+            } else {
+                printf("Acá debería guardar GET\n");
+                printf("p->request->method: %d\n", p->request->method);
 
+                parser_utils_strcmpi_destroy(p->http_sub_parser->def);
+                parser_destroy(p->http_sub_parser);
+                next = request_SP_AFTER_METHOD;
+                p->http_sub_parser = NULL;
+            }
+
+            break;
+        case STRING_CMP_NEQ:
+        default:
+            // TODO: this can fail / start
             parser_utils_strcmpi_destroy(p->http_sub_parser->def);
             parser_destroy(p->http_sub_parser);
-            next = request_SP_AFTER_METHOD;
-            p->http_sub_parser=NULL;
-        }
-
-        break;
-    case STRING_CMP_NEQ:
-    default:
-        // TODO: this can fail / start
-        parser_utils_strcmpi_destroy(p->http_sub_parser->def);
-        parser_destroy(p->http_sub_parser);
-        // TODO: this can fail / end
-        next = request_error_unsupported_method;
-        p->request->method = -1;
-        break;
+            // TODO: this can fail / end
+            next = request_error_unsupported_method;
+            p->request->method = -1;
+            break;
     }
 
     return next;
 }
 
 // When host is not empty, the proxy must ignore the following Host field.
-int retrieveHostAndPort(struct request *req, char *URI_reference)
-{
+int retrieveHostAndPort(struct request *req, char *URI_reference) {
     // char * URI_reference = "http://www.ics.uci.edu/pub/ietf/uri/#Related";
     // char * URI_reference2 = "foo://example.com:8042/over/there?name=ferret#nose";
     // char * URI_reference3 = "/over/there";
@@ -116,20 +116,17 @@ int retrieveHostAndPort(struct request *req, char *URI_reference)
     regex_t regexCompiled;
     regmatch_t groupArray[maxGroups];
     char *cursor;
-    if (regcomp(&regexCompiled, regexString, REG_EXTENDED))
-    {
+    if (regcomp(&regexCompiled, regexString, REG_EXTENDED)) {
         return -1;
     };
 
     cursor = URI_reference;
-    for (int i = 0; i < maxMatches; i++)
-    {
+    for (int i = 0; i < maxMatches; i++) {
         regexec(&regexCompiled, cursor, maxGroups, groupArray, 0);
 
         unsigned int offset = 0;
 
-        for (int g = 0; g < maxGroups; g++)
-        {
+        for (int g = 0; g < maxGroups; g++) {
             if (g == 0)
                 offset = groupArray[g].rm_eo;
 
@@ -138,24 +135,21 @@ int retrieveHostAndPort(struct request *req, char *URI_reference)
             cursorCopy[groupArray[g].rm_eo] = 0;
 
             // Authority is the 4th group
-            if (g == 4 && strlen(cursorCopy + groupArray[g].rm_so) != 0)
-            {
+            if (g == 4 && strlen(cursorCopy + groupArray[g].rm_so) != 0) {
                 char *authority = strdup(cursorCopy + groupArray[g].rm_so);
 
                 req->host = strsep(&authority, ":");
 
                 char *port = strsep(&authority, "");
 
-                if (port != NULL)
-                {
+                if (port != NULL) {
                     char *endptr;
                     errno = 0;
                     long val = strtol(port, &endptr, 10);
-                    if (errno || endptr == port || *endptr != '\0' || val < 0 || val >= 0x10000)
-                    {
+                    if (errno || endptr == port || *endptr != '\0' || val < 0 || val >= 0x10000) {
                         return 1;
                     }
-                    req->port = (uint16_t)val;
+                    req->port = (uint16_t) val;
                 }
 
                 free(authority);
@@ -172,104 +166,89 @@ int retrieveHostAndPort(struct request *req, char *URI_reference)
 // Accumulate request target upto single space.
 // Then retrieve host and port.
 static enum request_state
-target(const uint8_t c, struct request_parser *p)
-{
+target(const uint8_t c, struct request_parser *p) {
     enum request_state next;
 
-    if (c == ' ')
-    {
+    if (c == ' ') {
         // Request-target is over after single space
-        ((uint8_t *)&(p->request_target))[MAX_REQUEST_TARGET_SIZE] = '\0';
+        ((uint8_t *) &(p->request_target))[MAX_REQUEST_TARGET_SIZE] = '\0';
         p->i++;
 
-        if (retrieveHostAndPort(p->request, p->request_target))
-        {
+        if (retrieveHostAndPort(p->request, p->request_target)) {
+            //TODO: si no te lo encontró no me devuelvas error?
             next = request_error;
-        }
-        else
-        {
+        } else {
             next = request_HTTP_version;
         }
 
+        memset(p->request_target, '\0', sizeof(MAX_REQUEST_TARGET_SIZE));
         p->i = 0;
         return next;
     }
 
-    if (p->i == (uint8_t)MAX_REQUEST_TARGET_SIZE)
-    {
+    if (p->i == (uint8_t) MAX_REQUEST_TARGET_SIZE) {
+        memset(p->request_target, '\0', sizeof(MAX_REQUEST_TARGET_SIZE));
         next = request_error_too_long_request_target;
         p->i = 0;
         return next;
     }
 
-    ((uint8_t *)&(p->request_target))[p->i++] = c;
+    ((uint8_t *) &(p->request_target))[p->i++] = c;
     next = request_target;
     return next;
 }
 
 static enum request_state
-HTTP_version(const uint8_t c, struct request_parser *p)
-{
+HTTP_version(const uint8_t c, struct request_parser *p) {
     enum request_state next;
 
     // The parser should be NULL after method sub parser destruction.
-    if (p->http_sub_parser == NULL)
-    {
+    if (p->http_sub_parser == NULL) {
         struct parser_definition d = parser_utils_strcmpi("HTTP/1.1");
         p->http_sub_parser = parser_init(parser_no_classes(), &d);
     }
 
-    switch (parser_feed(p->http_sub_parser, c)->type)
-    {
-    case STRING_CMP_MAYEQ:
-        // HTTP version is case-sensitive. Should always be CAPS.
-        if (c >= 'a' && c <= 'z')
-        {
-            next = request_error_unsupported_http_version;
-        }
-        else
-        {
-            next = request_HTTP_version;
-        }
-        break;
-    case STRING_CMP_EQ:
-        parser_utils_strcmpi_destroy(p->http_sub_parser->def);
-        parser_destroy(p->http_sub_parser);
-        next = request_CRLF;
-        p->http_sub_parser=NULL;
-        break;
-    case STRING_CMP_NEQ:
-    default:
-        // TODO: this can fail / start
-        parser_utils_strcmpi_destroy(p->http_sub_parser->def);
-        parser_destroy(p->http_sub_parser);
-        // TODO: this can fail / end
-        next = request_error_unsupported_method;
-        break;
+    switch (parser_feed(p->http_sub_parser, c)->type) {
+        case STRING_CMP_MAYEQ:
+            // HTTP version is case-sensitive. Should always be CAPS.
+            if (c >= 'a' && c <= 'z') {
+                next = request_error_unsupported_http_version;
+            } else {
+                next = request_HTTP_version;
+            }
+            break;
+        case STRING_CMP_EQ:
+            parser_utils_strcmpi_destroy(p->http_sub_parser->def);
+            parser_destroy(p->http_sub_parser);
+            next = request_CRLF;
+            p->http_sub_parser = NULL;
+            break;
+        case STRING_CMP_NEQ:
+        default:
+            // TODO: this can fail / start
+            parser_utils_strcmpi_destroy(p->http_sub_parser->def);
+            parser_destroy(p->http_sub_parser);
+            // TODO: this can fail / end
+            next = request_error_unsupported_method;
+            break;
     }
 
     return next;
 }
 
 static enum request_state
-single_space(const uint8_t c, struct request_parser *p,enum request_state state)
-{
+single_space(const uint8_t c, struct request_parser *p, enum request_state state) {
     enum request_state next;
 
-    if (c != ' ')
-    {
+    if (c != ' ') {
         next = request_error;
-    }
-    else
-    {
-        if(state==request_SP_AFTER_METHOD){
+    } else {
+        if (state == request_SP_AFTER_METHOD) {
             next = request_target;
-        }
-        else if(state==request_SP_AFTER_TARGET)
-        {
-            next=request_HTTP_version;
-        } else{
-            next=request_error;
+        } else if (state == request_SP_AFTER_TARGET) {
+            next = request_HTTP_version;
+        } else {
+            next = request_error;
         }
     }
 
@@ -277,160 +256,279 @@ single_space(const uint8_t c, struct request_parser *p,enum request_state state)
 }
 
 static enum request_state
-CRLF(const uint8_t c, struct request_parser *p)
-{
+CRLF(const uint8_t c, struct request_parser *p) {
     enum request_state next;
 
     // The parser should be NULL after method sub parser destruction.
-    if (p->http_sub_parser == NULL)
-    {
-        struct parser_definition d = parser_utils_strcmpi("\r\n");
+    if (p->http_sub_parser == NULL) {
+        struct parser_definition d = parser_utils_strcmpi("\n");
+//        struct parser_definition d = parser_utils_strcmpi("\r\n");
         p->http_sub_parser = parser_init(parser_no_classes(), &d);
     }
 
-    switch (parser_feed(p->http_sub_parser, c)->type)
-    {
-    case STRING_CMP_MAYEQ:
-        next = request_CRLF;
-        break;
-    case STRING_CMP_EQ:
-        parser_utils_strcmpi_destroy(p->http_sub_parser->def);
-        parser_destroy(p->http_sub_parser);
-        next = request_header_field_name;
-        //next = request_done;
-        break;
-    case STRING_CMP_NEQ:
-    default:
-        // TODO: this can fail / start
-        parser_utils_strcmpi_destroy(p->http_sub_parser->def);
-        parser_destroy(p->http_sub_parser);
-        // TODO: this can fail / end
-        next = request_error_CRLF_not_found;
-        break;
+    switch (parser_feed(p->http_sub_parser, c)->type) {
+        case STRING_CMP_MAYEQ:
+            next = request_CRLF;
+            break;
+        case STRING_CMP_EQ:
+            parser_utils_strcmpi_destroy(p->http_sub_parser->def);
+            parser_destroy(p->http_sub_parser);
+            next = request_header_field_name;
+            //next = request_done;
+            break;
+        case STRING_CMP_NEQ:
+        default:
+            // TODO: this can fail / start
+            parser_utils_strcmpi_destroy(p->http_sub_parser->def);
+            parser_destroy(p->http_sub_parser);
+            // TODO: this can fail / end
+            next = request_error_CRLF_not_found;
+            break;
     }
 
     return next;
+}
+
+char *strtolower(char *s) {
+
+    size_t len = strlen(s);
+    char *d = (char *) malloc(strlen(s));
+    int i = 0;
+
+    for (i = 0; i < len; i++) {
+
+        d[i] = (char) tolower(s[i]);
+
+
+    }
+    d[i] = '\0';
+    return d;
 }
 
 // HTTP 1.1 requires the Host field.
 
 // For now, it's only parsing Host header field.
 static enum request_state
-header_field_name(const uint8_t c, struct request_parser *p)
-{
+header_field_name(const uint8_t c, struct request_parser *p) {
     enum request_state next;
 
     // If CRLF is found, headers field are over and this is the Empty Line.
+    if (strlen(p->header_field_name) == 0 && c == '\r') {
 
-    if (c == ':')
-    {
-        // Header field name is over after single space
-        ((uint8_t *)&(p->header_field_name))[MAX_HEADER_FIELD_NAME_SIZE] = '\0';
+        return request_empty_line_waiting_for_LF;
+
+    }
+
+    if (c == ':') {
+        // Header field name is over after :
+        ((uint8_t *) &(p->header_field_name))[MAX_HEADER_FIELD_NAME_SIZE] = '\0';
         p->i++;
 
-        // if (strcmp(tolower(p->header_field_name),"host") == 0)
-        // {
-        //     if(p->request->host != NULL)
-        // }
-        // else
-        // {
-            next = request_header_field_value;
-        // }
+        char *aux = strtolower(p->header_field_name);
+
+        if (strlen(p->request->host) == 0 && (strcmp(aux, "host") == 0)) {
+            p->i = 0;
+            next = request_host_field_value;
+        } else {
+            next = request_header_field_name;
+        }
+
+        free(aux);
 
         return next;
     }
 
-    if ((strchr("!#$%&'*+-.^_`|~", c) == NULL && !isdigit(c) && !isalpha(c)))
-    {
+    if ((strchr("!#$%&'*+-.^_`|~", c) == NULL && !isdigit(c) && !isalpha(c))) {
+        memset(p->header_field_name, '\0', sizeof(MAX_HEADER_FIELD_NAME_SIZE));
         next = request_error;
         p->i = 0;
         return next;
     }
 
-    if (p->i == (uint8_t)MAX_HEADER_FIELD_NAME_SIZE)
-    {
-        //TODO: too long header field?
+    if ((int) p->i == MAX_HEADER_FIELD_NAME_SIZE) {
+        //TODO: too long header field specific error?
+        memset(p->header_field_name, '\0', sizeof(MAX_HEADER_FIELD_NAME_SIZE));
         next = request_error;
         p->i = 0;
         return next;
     }
 
-    ((uint8_t *)&(p->header_field_name))[p->i++] = c;
-    next = request_target;
+    ((uint8_t *) &(p->header_field_name))[p->i++] = c;
+    next = request_header_field_name;
     return next;
 }
 
+static enum request_state
+header_host_OWS_after_value(const uint8_t c, struct request_parser *p) {
+
+
+    if (c == ' ' || c == '\t') {
+
+        return request_OWS_after_value;
+
+    }
+
+    if (c == '\r') {
+
+        return request_waiting_for_LF;
+
+    }
+
+    return request_error;
+}
+
+static enum request_state
+header_host_field_value(const uint8_t c, struct request_parser *p) {
+    enum request_state next;
+
+    if (c == ' ' || c == '\t') {
+
+        if (strlen(p->header_field_value) == 0) {
+            return request_host_field_value;
+        } else {
+//            p->request->host = p->header_field_value;
+            p->i = 0;
+
+            //TODO: remember to free p->request->host
+            size_t len = strlen(p->header_field_value);
+            memcpy(p->request->host, p->header_field_value, len + 1);
+            p->request->host[len] = '\0';
+            memset(p->header_field_value, '\0', sizeof(MAX_HEADER_FIELD_VALUE_SIZE));
+
+            return request_OWS_after_value;
+        }
+
+    }
+
+    if (c == '\r') {
+
+        // If host value was empty, error.
+        if (strlen(p->header_field_value) != 0) {
+            p->i = 0;
+//            p->request->host = p->header_field_value;
+
+            //TODO: remember to free p->request->host
+            size_t len = strlen(p->header_field_value);
+            memcpy(p->request->host, &p->header_field_value, len + 1);
+            p->request->host[len] = '\0';
+            memset(p->header_field_value, '\0', sizeof(MAX_HEADER_FIELD_NAME_SIZE));
+
+            return request_waiting_for_LF;
+        } else {
+            //TODO: probablemente p->i = 0; deberia estar en varios lugares más (donde retorne a otro estado)
+            p->i = 0;
+            return request_error;
+        }
+
+    }
+
+    // parsear c
+
+    if ((int) p->i == MAX_HEADER_FIELD_VALUE_SIZE) {
+        //TODO: too long header field value specific error?
+        memset(p->header_field_value, '\0', sizeof(MAX_HEADER_FIELD_VALUE_SIZE));
+        next = request_error;
+        p->i = 0;
+        return next;
+    }
+
+    ((uint8_t *) &(p->header_field_value))[p->i++] = c;
+    next = request_host_field_value;
+    return next;
+}
+
+static enum request_state
+empty_line(const uint8_t c, struct request_parser *p) {
+
+    if (c == '\n') {
+
+        return request_done;
+    }
+
+    return request_error;
+}
+
 extern void
-request_parser_init(struct request_parser *p)
-{
+request_parser_init(struct request_parser *p) {
     p->state = request_method;
     memset(p->request, 0, sizeof(*(p->request)));
 }
 
 //TODO: check whether case request_some_error is okay
 extern enum request_state
-request_parser_feed(struct request_parser *p, const uint8_t c)
-{
+request_parser_feed(struct request_parser *p, const uint8_t c) {
     enum request_state next;
 
-    switch (p->state)
-    {
-    case request_method:
-        next = method(c, p);
-        break;
-    case request_target:
-        next = target(c, p);
-        break;
-    case request_HTTP_version:
-        next = HTTP_version(c, p);
-        break;
-    case request_SP_AFTER_METHOD:
-        next = single_space(c, p,request_SP_AFTER_METHOD);
-        break;
-    case request_CRLF:
-        next = CRLF(c, p);
-        break;
-    case request_header_field_name:
-        next = header_field_name(c, p);
-        break;
-    case request_SP_AFTER_TARGET:
-        next = single_space(c, p,request_SP_AFTER_TARGET);
-        break;
-    case request_done:
-    case request_error:
-    case request_error_unsupported_version:
-    case request_error_too_long_request_target:
-        next = p->state;
-        break;
-    default:
-        next = request_error;
-        break;
+    switch (p->state) {
+        case request_method:
+            next = method(c, p);
+            break;
+        case request_target:
+            next = target(c, p);
+            break;
+        case request_HTTP_version:
+            next = HTTP_version(c, p);
+            break;
+        case request_SP_AFTER_METHOD:
+            next = single_space(c, p, request_SP_AFTER_METHOD);
+            break;
+        case request_CRLF:
+            next = CRLF(c, p);
+            break;
+        case request_header_field_name:
+            next = header_field_name(c, p);
+            break;
+        case request_host_field_value:
+            next = header_host_field_value(c, p);
+            break;
+        case request_OWS_after_value:
+            next = header_host_OWS_after_value(c, p);
+            break;
+        case request_waiting_for_LF:
+            next = LF(c, p);
+            break;
+        case request_empty_line_waiting_for_LF:
+            next = empty_line(c, p);
+            break;
+        case request_SP_AFTER_TARGET:
+            next = single_space(c, p, request_SP_AFTER_TARGET);
+            break;
+        case request_done:
+        case request_error:
+        case request_error_unsupported_version:
+        case request_error_too_long_request_target:
+            next = p->state;
+            break;
+        default:
+            next = request_error;
+            break;
     }
 
     return p->state = next;
 }
 
 extern bool
-request_is_done(const enum request_state st, bool *errored)
-{
-    if (st >= request_error && errored != 0)
-    {
+request_is_done(const enum request_state st, bool *errored) {
+    if (st >= request_error && errored != 0) {
         *errored = true;
     }
     return st >= request_done;
 }
 
 extern enum request_state
-request_consume(buffer *b, struct request_parser *p, bool *errored)
-{
+request_consume(buffer *b, struct request_parser *p, bool *errored, buffer *accum) {
     enum request_state st = p->state;
 
-    while (buffer_can_read(b))
-    {
+    while (buffer_can_read(b)) {
         const uint8_t c = buffer_read(b);
+
+        /* save byte to request accum */
+        if (buffer_can_write(accum)) {
+            buffer_write(accum, c);
+        }
+
         st = request_parser_feed(p, c);
-        if (request_is_done(st, errored))
-        {
+        if (request_is_done(st, errored)) {
             break;
         }
     }
@@ -438,19 +536,16 @@ request_consume(buffer *b, struct request_parser *p, bool *errored)
 }
 
 extern void
-request_close(struct request_parser *p)
-{
+request_close(struct request_parser *p) {
     // nada que hacer
 }
 
 extern int
 request_marshall(buffer *b,
-                 const enum socks_response_status status)
-{
+                 const enum socks_response_status status) {
     size_t n;
     uint8_t *buff = buffer_write_ptr(b, &n);
-    if (n < 10)
-    {
+    if (n < 10) {
         return -1;
     }
     buff[0] = 0x05;
@@ -514,26 +609,24 @@ request_marshall(buffer *b,
 // }
 
 enum socks_response_status
-errno_to_socks(const int e)
-{
+errno_to_socks(const int e) {
     enum socks_response_status ret = status_general_SOCKS_server_failure;
-    switch (e)
-    {
-    case 0:
-        ret = status_succeeded;
-        break;
-    case ECONNREFUSED:
-        ret = status_connection_refused;
-        break;
-    case EHOSTUNREACH:
-        ret = status_host_unreachable;
-        break;
-    case ENETUNREACH:
-        ret = status_network_unreachable;
-        break;
-    case ETIMEDOUT:
-        ret = status_ttl_expired;
-        break;
+    switch (e) {
+        case 0:
+            ret = status_succeeded;
+            break;
+        case ECONNREFUSED:
+            ret = status_connection_refused;
+            break;
+        case EHOSTUNREACH:
+            ret = status_host_unreachable;
+            break;
+        case ENETUNREACH:
+            ret = status_network_unreachable;
+            break;
+        case ETIMEDOUT:
+            ret = status_ttl_expired;
+            break;
     }
     return ret;
 }

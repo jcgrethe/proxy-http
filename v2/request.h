@@ -10,6 +10,7 @@
 
 #define MAX_REQUEST_TARGET_SIZE 8000
 #define MAX_HEADER_FIELD_NAME_SIZE 256
+#define MAX_HEADER_FIELD_VALUE_SIZE 256 //TODO
 
 enum http_method
 {
@@ -53,7 +54,10 @@ enum request_state
     request_CRLF,
 
     request_header_field_name,
-    request_header_field_value,
+    request_host_field_value,
+    request_OWS_after_value,
+    request_waiting_for_LF,
+    request_empty_line_waiting_for_LF,
 
     request_dstaddr_fqdn,
     request_dstaddr,
@@ -79,6 +83,7 @@ struct request_parser
 
     char request_target[MAX_REQUEST_TARGET_SIZE + 1];
     char header_field_name[MAX_HEADER_FIELD_NAME_SIZE + 1];
+    char header_field_value[MAX_HEADER_FIELD_VALUE_SIZE + 1];
 
     /** cuantos bytes ya leimos */
     uint8_t i;
@@ -126,7 +131,7 @@ request_parser_feed(struct request_parser *p, const uint8_t c);
  *   si el parsing se debió a una condición de error
  */
 enum request_state
-request_consume(buffer *b, struct request_parser *p, bool *errored);
+request_consume(buffer *b, struct request_parser *p, bool *errored, buffer *pBuffer);
 
 /**
  * Permite distinguir a quien usa socks_hello_parser_feed si debe seguir
