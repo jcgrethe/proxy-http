@@ -27,6 +27,8 @@
 #include "selector.h"
 #include "httpnio.h"
 
+#include "./sctp/sctp_integration.h"
+
 static bool done = false;
 
 static void
@@ -38,6 +40,7 @@ sigterm_handler(const int signal) {
 int
 main(const int argc, const char **argv) {
     unsigned port = 1080;
+    unsigned sctp_port = 1081;
 
     if(argc == 1) {
         // utilizamos el default
@@ -70,17 +73,30 @@ main(const int argc, const char **argv) {
     addr.sin_addr.s_addr = htonl(INADDR_ANY);
     addr.sin_port        = htons(port);
 
+    struct sockaddr_in addr_sctp;
+    memset(&addr_sctp, 0, sizeof(addr_sctp));
+    addr_sctp.sin_family      = AF_INET;
+    addr_sctp.sin_addr.s_addr = htonl(INADDR_ANY);
+    addr_sctp.sin_port        = htons(sctp_port);
+
+
     const int server = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    const int sctp_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+
     if(server < 0) {
-        err_msg = "unable to create socket";
+        err_msg = "unable to create server socket";
         goto finally;
     }
-
+    if(sctp_socket < 0) {
+        err_msg = "unable to create sctp socket";
+        goto finally;
+    }
     fprintf(stdout, "Listening on TCP port %d\n", port);
 
     // man 7 ip. no importa reportar nada si falla.
     setsockopt(server, SOL_SOCKET, SO_REUSEADDR, &(int){ 1 }, sizeof(int));
 
+    // Main proxy socket listening
     if(bind(server, (struct sockaddr*) &addr, sizeof(addr)) < 0) {
         err_msg = "unable to bind socket";
         goto finally;
@@ -88,6 +104,18 @@ main(const int argc, const char **argv) {
 
     if (listen(server, 20) < 0) {
         err_msg = "unable to listen";
+        goto finally;
+    }
+
+
+    //SCTP Socket listening
+    if(bind(sctp_socket, (struct sockaddr*) &addr_sctp, sizeof(addr_sctp)) < 0) {
+        err_msg = "unable to bind socket for sctp";
+        goto finally;
+    }
+
+    if (listen(sctp_socket, 20) < 0) {
+        err_msg = "unable to listen sctp socket";
         goto finally;
     }
 
@@ -122,12 +150,27 @@ main(const int argc, const char **argv) {
         .handle_write      = NULL,
         .handle_close      = NULL, // nada que liberar
     };
+        const struct fd_handler sctp_handler = {
+        .handle_read       = sctp_passive_accept,  //TODO: Put sctp function
+        .handle_write      = NULL,
+        .handle_close      = NULL, // nada que liberar
+    };
     ss = selector_register(selector, server, &http,
                                               OP_READ, NULL);
+    selector_status ss_sctp = selector_register(selector, sctp_socket, &sctp_handler,
+                                              OP_READ, NULL);
     if(ss != SELECTOR_SUCCESS) {
-        err_msg = "registering fd";
+        err_msg = "registering server fd";
         goto finally;
     }
+    if(ss_sctp != SELECTOR_SUCCESS) {
+        err_msg = "registering sctp fd";
+        goto finally;
+    }
+
+
+
+
     for(;!done;) {
         err_msg = NULL;
         ss = selector_select(selector);
