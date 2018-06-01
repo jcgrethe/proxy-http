@@ -2,6 +2,11 @@
 # Created by https://www.gitignore.io/api/c
 cmake-build-debug/*
 cmake-build-debug/
+../cmake-build-debug/
+../.idea/
+../log/
+../parsers/
+../testing
 ### C ###
 # Prerequisites
 *.d
