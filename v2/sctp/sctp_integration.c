@@ -11,6 +11,7 @@
 
 // #include "../httpnio.c"
 #define N(x) (sizeof(x)/sizeof((x)[0]))
+#define ATTACHMENT(key) ( (struct sctp_data *)(key)->data)
 
 void sctp_read(struct selector_key *key);
 
@@ -82,14 +83,33 @@ void sctp_passive_accept(struct selector_key *key){
     // data_struct_destroy(data_struct);
 }
 
+// When server is reading - key structure obtained from selector with data and current active clien
+// For more info about key see selector.h file
 void sctp_read(struct selector_key *key){
-	printf("reading!\n");
+	printf("reading...\n");
+
+	//Getting data
+	struct sctp_data *data = ATTACHMENT(key);	//Obtiene la data dentro de la key
+	//set interest OP WRITE tells to the selector that you are going to write and after this it calls sctp_write
+	//Thats why you have to save things on buffers in data structure    
+    if (handle_request(data) < 0 || selector_set_interest(key->s, key->fd, OP_WRITE) != SELECTOR_SUCCESS){
+        selector_unregister_fd(key->s, data->client_fd);
+    };
+
+
+	exit(0); 	//REMOVE!
 }
 
+// When server is writting
 void sctp_write(struct selector_key *key){
 	printf("writting!\n");
 }
 
+// When server is closing
 void sctp_close(struct selector_key *key){
 	printf("closing!\n");
+}
+
+int handle_request(struct sctp_data *data){
+    buffer * b = &data->buffer_read;
 }

@@ -81,7 +81,7 @@ main(const int argc, const char **argv) {
 
 
     const int server = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    const int sctp_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    const int sctp_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_SCTP);
 
     if(server < 0) {
         err_msg = "unable to create server socket";
@@ -91,7 +91,7 @@ main(const int argc, const char **argv) {
         err_msg = "unable to create sctp socket";
         goto finally;
     }
-    fprintf(stdout, "Listening on TCP port %d\n", port);
+    fprintf(stdout, "Listening on TCP port %d for http and %d for sctp.\n", port, sctp_port);
 
     // man 7 ip. no importa reportar nada si falla.
     setsockopt(server, SOL_SOCKET, SO_REUSEADDR, &(int){ 1 }, sizeof(int));
@@ -118,6 +118,7 @@ main(const int argc, const char **argv) {
         err_msg = "unable to listen sctp socket";
         goto finally;
     }
+    // check with: sudo nmap -sY localhost -PY -p 1081
 
     // registrar sigterm es útil para terminar el programa normalmente.
     // esto ayuda mucho en herramientas como valgrind.

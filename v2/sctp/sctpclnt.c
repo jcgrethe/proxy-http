@@ -19,6 +19,8 @@
 #include <netinet/sctp.h>
 #include "handlers.h"
 
+ #define PROXY_SCTP_PORT 1081
+
 int main()
 {
   int connSock, in, i, ret, flags;
@@ -47,12 +49,13 @@ int main()
   /* Specify the peer endpoint to which we'll connect */
   bzero( (void *)&servaddr, sizeof(servaddr) );
   servaddr.sin_family = AF_INET;
-  servaddr.sin_port = htons(MY_PORT_NUM);
+  servaddr.sin_port = htons(PROXY_SCTP_PORT);
   servaddr.sin_addr.s_addr = inet_addr( "127.0.0.1" );
 
   /* Connect to the server */
   ret = connect( connSock, (struct sockaddr *)&servaddr, sizeof(servaddr) );
 
+  printf("Connected?: %d %d\n", ret, PROXY_SCTP_PORT);
   /* Enable receipt of SCTP Snd/Rcv Data via sctp_recvmsg */
   memset( (void *)&events, 0, sizeof(events) );
   events.sctp_data_io_event = 1;
