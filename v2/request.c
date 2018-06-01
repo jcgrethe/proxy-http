@@ -261,7 +261,7 @@ CRLF(const uint8_t c, struct request_parser *p) {
 
     // The parser should be NULL after method sub parser destruction.
     if (p->http_sub_parser == NULL) {
-        struct parser_definition d = parser_utils_strcmpi("\n");
+        struct parser_definition d = parser_utils_strcmpi("\r\n");
 //        struct parser_definition d = parser_utils_strcmpi("\r\n");
         p->http_sub_parser = parser_init(parser_no_classes(), &d);
     }
@@ -313,12 +313,20 @@ header_field_name(const uint8_t c, struct request_parser *p) {
     enum request_state next;
 
     // If CRLF is found, headers field are over and this is the Empty Line.
-    if (strlen(p->header_field_name) == 0 && c == '\r') {
+   if (strlen(p->header_field_name) == 0 && c == '\r') {
 
         return request_empty_line_waiting_for_LF;
 
     }
-
+    if(c=='\r'){
+        p->i = 0;
+        memset(p->header_field_name, '\0', sizeof(MAX_HEADER_FIELD_NAME_SIZE));
+        return request_waiting_for_LF;
+   }
+    //TODO arreglar fix caso feliz
+    if(c==' '){
+        return request_header_field_name;
+    }
     if (c == ':') {
         // Header field name is over after :
         ((uint8_t *) &(p->header_field_name))[MAX_HEADER_FIELD_NAME_SIZE] = '\0';
@@ -567,11 +575,11 @@ request_marshall(buffer *b,
 // cmd_resolve(struct request* request,  struct sockaddr **originaddr,
 //             socklen_t *originlen, int *domain) {
 //     enum socks_response_status ret = status_general_SOCKS_server_failure;
-
+//
 //     *domain                  = AF_INET;
 //     struct sockaddr *addr    = 0x00;
 //     socklen_t        addrlen = 0;
-
+//
 //     switch (request->dest_addr_type) {
 //         case socks_req_addrtype_domain: {
 //             struct hostent *hp = gethostbyname(request->dest_addr.fqdn);
@@ -583,7 +591,7 @@ request_marshall(buffer *b,
 //             request->dest_addr.ipv4.sin_family = hp->h_addrtype;
 //             memcpy((char *)&request->dest_addr.ipv4.sin_addr,
 //                    *hp->h_addr_list, hp->h_length);
-
+//
 //         }
 //         /* no break */
 //         case socks_req_addrtype_ipv4:
@@ -601,10 +609,10 @@ request_marshall(buffer *b,
 //         default:
 //             return status_address_type_not_supported;
 //     }
-
+//
 //     *originaddr = addr;
 //     *originlen  = addrlen;
-
+//
 //     return ret;
 // }
 

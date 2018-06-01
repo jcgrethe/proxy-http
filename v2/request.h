@@ -35,12 +35,11 @@ union socks_addr {
 struct request
 {
     enum http_method method;
-
+    union socks_addr      dest_addr;
     char *host;
-    uint16_t port;
+    in_port_t port;
 
     /** port in network byte order */
-    in_port_t dest_port;
 };
 
 enum request_state
@@ -131,7 +130,7 @@ request_parser_feed(struct request_parser *p, const uint8_t c);
  *   si el parsing se debió a una condición de error
  */
 enum request_state
-request_consume(buffer *b, struct request_parser *p, bool *errored, buffer *pBuffer);
+request_consume(buffer *b, struct request_parser *p, bool *errored, buffer *pBuffer );
 
 /**
  * Permite distinguir a quien usa socks_hello_parser_feed si debe seguir
