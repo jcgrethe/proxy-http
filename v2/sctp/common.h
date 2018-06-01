@@ -14,4 +14,4 @@
 #define LOGIN_RESPONSE_LEN	4
 #define COM_RESPONSE_LEN	10
 
-int log(uint8_t * buf, char * u, char * p);
+// int log(uint8_t * buf, char * u, char * p);

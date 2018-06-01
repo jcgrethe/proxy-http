@@ -1,23 +1,32 @@
-#include <sys/socket.h>
 #include <unistd.h>
 #include <memory.h>
 #include <malloc.h>
+#include <sys/socket.h>
+#include <sys/types.h>
 #include <netinet/in.h>
+#include <netinet/sctp.h>
 #include <stdlib.h>
 #include <strings.h>
+#include <errno.h>
+#include <ctype.h>
 
 #include "../selector.h"
 #include "sctp_integration.h"
+#include "common.h"
 
 // #include "../httpnio.c"
 #define N(x) (sizeof(x)/sizeof((x)[0]))
 #define ATTACHMENT(key) ( (struct sctp_data *)(key)->data)
 
+#define USER "admin"
+#define PASS "admin"
+
 void sctp_read(struct selector_key *key);
-
 void sctp_write(struct selector_key *key);
-
 void sctp_close(struct selector_key *key);
+int handle_request(struct sctp_data *data);
+int check_login(char message[MAX_DATAGRAM_MESSAGE]);
+void parse_datagram(struct sctp_data *data, buffer * b);
 
 static const struct fd_handler sctp_handler = {
         .handle_read   = sctp_read,
@@ -27,14 +36,13 @@ static const struct fd_handler sctp_handler = {
 };
 
 // management struct functions.
-struct sctp_data *
-new_sctp_data(const int client_fd){
-    struct sctp_data *ret;
+struct sctp_data * new_sctp_data(const int client_fd){
+    struct sctp_data * ret;
     ret = malloc(sizeof(struct sctp_data));
     if (ret == NULL){
         return ret;
     }
-
+    ret->is_logged = 0;
     ret->client_fd     = client_fd;
     buffer_init(&ret->buffer_write, N(ret->raw_buffer_write),ret->raw_buffer_write);
     buffer_init(&ret->buffer_read , N(ret->raw_buffer_read) ,ret->raw_buffer_read);
@@ -42,7 +50,7 @@ new_sctp_data(const int client_fd){
 }
 
 void sctp_passive_accept(struct selector_key *key){
- 	printf("Arrived to sctp_passive_accept\n");
+ 	printf("Welcome to SCTP Server\n");
 	
 	struct sockaddr_storage       client_addr;
 	socklen_t                     client_addr_len = sizeof(client_addr);
@@ -95,14 +103,29 @@ void sctp_read(struct selector_key *key){
     if (handle_request(data) < 0 || selector_set_interest(key->s, key->fd, OP_WRITE) != SELECTOR_SUCCESS){
         selector_unregister_fd(key->s, data->client_fd);
     };
-
-
-	exit(0); 	//REMOVE!
 }
 
 // When server is writting
 void sctp_write(struct selector_key *key){
+	struct sctp_data *data = ATTACHMENT(key);
+	int length = 4 + strlen(data->datagram.message), ret;
 	printf("writting!\n");
+	printf("Current Datagram Header in writting: %i %i %i %i\n", data->datagram.type, data->datagram.command, data->datagram.argsq, data->datagram.code);
+
+	uint8_t * buffer = malloc(length);
+	buffer[0] = data->datagram.type;
+	buffer[1] = data->datagram.command;
+	buffer[2] = data->datagram.argsq;
+	buffer[3] = data->datagram.code;
+	strcpy(&buffer[4], data->datagram.message);
+
+	ret = sctp_sendmsg( data->client_fd, (void *) buffer, length ,
+                          NULL, 0, 0, 0, STREAM, 0, 0 );
+	if (ret>0){
+		printf("Sended.\n");
+	}
+
+	exit(0);
 }
 
 // When server is closing
@@ -112,4 +135,92 @@ void sctp_close(struct selector_key *key){
 
 int handle_request(struct sctp_data *data){
     buffer * b = &data->buffer_read;
+    struct sctp_sndrcvinfo sndrcvinfo;
+    int flags = 0;
+	size_t count;
+    uint8_t * ptr = buffer_write_ptr(&data->buffer_read, &count);
+    ssize_t length;
+    char c;
+    int i = 0;
+    
+    // while(1){
+        length = sctp_recvmsg(data->client_fd, ptr, count, NULL, 0, &sndrcvinfo, &flags);
+        if (length <= 0){
+            return 0;
+        }
+        buffer_write_adv(&data->buffer_read, length);
+
+        parse_datagram(data, b);
+		
+        if(!data->is_logged){
+        	if (data->datagram.type == 0){
+        		// Wants to log in
+        		if(check_login(data->datagram.message)){	
+        			data->is_logged = 1;
+        			printf("Logged.\n");
+        			data->datagram.argsq = 0; 
+        			data->datagram.code = 1; //Ok 
+        		}
+        	}
+        }else{
+        	//Already logged & Analize request
+        	switch(data->datagram.type){
+              case 1: //metric 
+
+                break;
+
+              case 2: //config
+                break;
+
+              case 3: //sys
+                break;
+
+              default: // bad request
+                break;
+            }
+
+
+        }
+  		printf("Datagram Header for send: %i %i %i %i\n", data->datagram.type, data->datagram.command, data->datagram.argsq, data->datagram.code);
+    // }
+    return 1; 
+}
+
+void parse_datagram(struct sctp_data *data, buffer * b){
+	int i = 0;
+	char c;
+	if (buffer_can_read(b)){
+			data->datagram.type = (uint8_t)buffer_read(b);
+		}else{
+			// Type not found
+		}
+		if (buffer_can_read(b)){
+			data->datagram.command = (uint8_t)buffer_read(b);
+		}else{
+			// Command not found
+		}
+		if (buffer_can_read(b)){
+			data->datagram.argsq = (uint8_t)buffer_read(b);
+		}else{
+			// Argsq not found
+		}
+		if (buffer_can_read(b)){
+			data->datagram.code = (uint8_t)buffer_read(b);
+		}else{
+			// Code not found
+		} 						
+        while(buffer_can_read(b) && i < MAX_DATAGRAM_MESSAGE){
+            c = buffer_read(b);
+			data->datagram.message[i++] = c; 
+            // printf("%c %i\n", c, c);
+        }
+}
+
+int check_login(char message[MAX_DATAGRAM_MESSAGE]){
+	char user[MAX_DATAGRAM_MESSAGE/2], pass[MAX_DATAGRAM_MESSAGE/2];
+	sscanf(message, "%s %s", user, pass);
+	if (strcmp(user, USER)!=0 || strcmp(pass, PASS)!=0){
+		return 0;
+	}
+	return 1;
 }

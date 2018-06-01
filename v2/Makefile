@@ -23,7 +23,7 @@ HTTP_NIO=httpnio.c
 STM=stm.c
 PARSER=parser.c
 PARSER_UTILS=parser_utils.c
-SCTP_HANDLERS=sctp/sctp_integration.c
+SCTP_HANDLERS=sctp/sctp_integration.c -lsctp
 
 
 
