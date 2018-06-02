@@ -113,6 +113,8 @@ int retrieveHostAndPort(struct request *req, char *URI_reference) {
     size_t maxMatches = 1;
     size_t maxGroups = 10;
 
+    int ret = 0;
+
     regex_t regexCompiled;
     regmatch_t groupArray[maxGroups];
     char *cursor;
@@ -147,20 +149,54 @@ int retrieveHostAndPort(struct request *req, char *URI_reference) {
                     errno = 0;
                     long val = strtol(port, &endptr, 10);
                     if (errno || endptr == port || *endptr != '\0' || val < 0 || val >= 0x10000) {
-                        return 1;
+                        return -1;
                     }
                     req->port = (uint16_t) val;
                 }
 
                 free(authority);
+
+                ret = 1;
             }
         }
         cursor += offset;
     }
 
     regfree(&regexCompiled);
-    return 0;
+    return ret;
 }
+
+//int parseIPV4Address(char *URI_reference) {
+//    regex_t regex;
+//    int reti;
+//    char msgbuf[100];
+//    int ret;
+//
+///* Compile regular expression */
+//    reti = regcomp(&regex, "^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$", REG_EXTENDED);
+//    if (reti) {
+//        fprintf(stderr, "Could not compile regex\n");
+//        exit(1);
+//    }
+//
+///* Execute regular expression */
+//    reti = regexec(&regex, URI_reference, 0, NULL, 0);
+//    if (!reti) {
+//        ret = 0;
+//    }
+//    else if (reti == REG_NOMATCH) {
+//        ret = 1;
+//    }
+//    else {
+//        regerror(reti, &regex, msgbuf, sizeof(msgbuf));
+//        fprintf(stderr, "Regex match failed: %s\n", msgbuf);
+//        exit(1);
+//    }
+//
+///* Free memory allocated to the pattern buffer by regcomp() */
+//    regfree(&regex);
+//    return ret;
+//}
 
 // Based on 5.3.2. absolute-form of RFC 7230
 // Accumulate request target upto single space.
@@ -174,8 +210,8 @@ target(const uint8_t c, struct request_parser *p) {
         ((uint8_t *) &(p->request_target))[MAX_REQUEST_TARGET_SIZE] = '\0';
         p->i++;
 
-        if (retrieveHostAndPort(p->request, p->request_target)) {
-            //TODO: si no te lo encontró no me devuelvas error?
+        if (retrieveHostAndPort(p->request, p->request_target) == -1) {
+//            TODO: si no te lo encontró no me devuelvas error?
             next = request_error;
         } else {
             next = request_HTTP_version;
@@ -259,32 +295,41 @@ static enum request_state
 CRLF(const uint8_t c, struct request_parser *p) {
     enum request_state next;
 
-    // The parser should be NULL after method sub parser destruction.
-    if (p->http_sub_parser == NULL) {
-        struct parser_definition d = parser_utils_strcmpi("\r\n");
-//        struct parser_definition d = parser_utils_strcmpi("\r\n");
-        p->http_sub_parser = parser_init(parser_no_classes(), &d);
+    if (c == '\r') {
+        return LF_end;
     }
+    return request_error;
 
-    switch (parser_feed(p->http_sub_parser, c)->type) {
-        case STRING_CMP_MAYEQ:
-            next = request_CRLF;
-            break;
-        case STRING_CMP_EQ:
-            parser_utils_strcmpi_destroy(p->http_sub_parser->def);
-            parser_destroy(p->http_sub_parser);
-            next = request_header_field_name;
-            //next = request_done;
-            break;
-        case STRING_CMP_NEQ:
-        default:
-            // TODO: this can fail / start
-            parser_utils_strcmpi_destroy(p->http_sub_parser->def);
-            parser_destroy(p->http_sub_parser);
-            // TODO: this can fail / end
-            next = request_error_CRLF_not_found;
-            break;
-    }
+
+
+
+
+    // The parser should be NULL after method sub parser destruction.
+//    if (p->http_sub_parser == NULL) {
+//        struct parser_definition d = parser_utils_strcmpi("\r\n");
+////        struct parser_definition d = parser_utils_strcmpi("\r\n");
+//        p->http_sub_parser = parser_init(parser_no_classes(), &d);
+//    }
+//
+//    switch (parser_feed(p->http_sub_parser, c)->type) {
+//        case STRING_CMP_MAYEQ:
+//            next = request_CRLF;
+//            break;
+//        case STRING_CMP_EQ:
+//            parser_utils_strcmpi_destroy(p->http_sub_parser->def);
+//            parser_destroy(p->http_sub_parser);
+//            next = request_header_field_name;
+//            //next = request_done;
+//            break;
+//        case STRING_CMP_NEQ:
+//        default:
+//            // TODO: this can fail / start
+//            parser_utils_strcmpi_destroy(p->http_sub_parser->def);
+//            parser_destroy(p->http_sub_parser);
+//            // TODO: this can fail / end
+//            next = request_error_CRLF_not_found;
+//            break;
+//    }
 
     return next;
 }
@@ -300,7 +345,7 @@ CREND(const uint8_t c, struct request_parser *p) {
 static enum request_state
 LFEND(const uint8_t c, struct request_parser *p) {
     if (c == '\n') {
-        return request_done;
+        return request_header_field_name;
     }
     return request_error;
 }
@@ -350,9 +395,16 @@ header_field_name(const uint8_t c, struct request_parser *p) {
 
         char *aux = strtolower(p->header_field_name);
 
-        if (strlen(p->request->host) == 0 && (strcmp(aux, "host") == 0)) {
-            p->i = 0;
-            next = request_host_field_value;
+        if (strcmp(aux, "host") == 0) {
+
+            // Host was empty in first request line
+            if (strlen(p->request->host) == 0) {
+                p->i = 0;
+                next = request_host_field_value;
+            } else {
+                next = request_no_empty_host;
+            }
+
         } else {
             next = request_header_field_name;
         }
@@ -410,16 +462,15 @@ header_host_field_value(const uint8_t c, struct request_parser *p) {
         if (strlen(p->header_field_value) == 0) {
             return request_host_field_value;
         } else {
-//            p->request->host = p->header_field_value;
-            p->i = 0;
+                p->i = 0;
 
-            //TODO: remember to free p->request->host
-            size_t len = strlen(p->header_field_value);
-            memcpy(p->request->host, p->header_field_value, len + 1);
-            p->request->host[len] = '\0';
-            memset(p->header_field_value, '\0', sizeof(MAX_HEADER_FIELD_VALUE_SIZE));
+                //TODO: remember to free p->request->host
+                size_t len = strlen(p->header_field_value);
+                memcpy(p->request->host, p->header_field_value, len + 1);
+                p->request->host[len] = '\0';
+                memset(p->header_field_value, '\0', sizeof(MAX_HEADER_FIELD_VALUE_SIZE));
 
-            return request_OWS_after_value;
+                return request_OWS_after_value;
         }
 
     }
@@ -429,15 +480,16 @@ header_host_field_value(const uint8_t c, struct request_parser *p) {
         // If host value was empty, error.
         if (strlen(p->header_field_value) != 0) {
             p->i = 0;
-//            p->request->host = p->header_field_value;
 
-            //TODO: remember to free p->request->host
-            size_t len = strlen(p->header_field_value);
-            memcpy(p->request->host, &p->header_field_value, len + 1);
-            p->request->host[len] = '\0';
-            memset(p->header_field_value, '\0', sizeof(MAX_HEADER_FIELD_NAME_SIZE));
+                //TODO: remember to free p->request->host
+                size_t len = strlen(p->header_field_value);
+                memcpy(p->request->host, &p->header_field_value, len + 1);
+                p->request->host[len] = '\0';
 
-            return request_waiting_for_LF;
+                memset(p->header_field_value, '\0', sizeof(MAX_HEADER_FIELD_NAME_SIZE));
+
+                return request_waiting_for_LF;
+
         } else {
             //TODO: probablemente p->i = 0; deberia estar en varios lugares más (donde retorne a otro estado)
             p->i = 0;
@@ -467,7 +519,7 @@ empty_line(const uint8_t c, struct request_parser *p) {
     if (c == '\n') {
 
 //        return request_body;
-//        return request_last_crlf;
+        return request_last_crlf;
     }
 
     return request_error;
@@ -477,11 +529,13 @@ extern void
 request_parser_init(struct request_parser *p) {
     p->state = request_method;
     memset(p->request, 0, sizeof(*(p->request)));
+
+    p->host_field_value_complete = 0;
 }
 
 //TODO: check whether case request_some_error is okay
 extern enum request_state
-request_parser_feed(struct request_parser *p, const uint8_t c) {
+request_parser_feed(struct request_parser *p, const uint8_t c, buffer *accum) {
     enum request_state next;
 
     switch (p->state) {
@@ -517,6 +571,42 @@ request_parser_feed(struct request_parser *p, const uint8_t c) {
             break;
         case request_SP_AFTER_TARGET:
             next = single_space(c, p, request_SP_AFTER_TARGET);
+            break;
+        case request_no_empty_host:
+
+            if(p->host_field_value_complete == 0){
+
+                p->value_len = 0;
+
+                p->host_field_value_complete = 1;
+
+                if (buffer_can_write(accum)) {
+                    buffer_write(accum, (uint8_t) ':');
+                }
+
+                int i = 0;
+                while (buffer_can_write(accum) && p->request->host[i] != '\0') {
+                    buffer_write(accum, (uint8_t) p->request->host[i++]);
+                }
+
+                if(!buffer_can_write(accum)){
+                    next = request_error;
+                }
+
+            }
+
+            if(c == '\r') {
+                next = request_waiting_for_LF;
+            } else {
+                next = request_no_empty_host;
+            }
+
+            p->value_len++;
+
+            if(p->value_len > MAX_HEADER_FIELD_VALUE_SIZE) {
+                next = request_error;
+            }
+
             break;
         case request_last_crlf:
             next = CREND(c, p);
@@ -554,15 +644,32 @@ request_consume(buffer *b, struct request_parser *p, bool *errored, buffer *accu
         const uint8_t c = buffer_read(b);
 
         /* save byte to request accum */
-        if (buffer_can_write(accum)) {
-            buffer_write(accum, c);
+//        if (buffer_can_write(accum)) {
+//            buffer_write(accum, c);
+//        }
+
+        st = request_parser_feed(p, c, accum);
+
+        if(st != request_no_empty_host){
+         if (buffer_can_write(accum)) {
+                buffer_write(accum, c);
+            } else {
+                 st = request_error;
+         }
         }
 
-        st = request_parser_feed(p, c);
         if (request_is_done(st, errored)) {
             break;
         }
     }
+
+    while (buffer_can_read(b)) {
+        const uint8_t c = buffer_read(b);
+        if (buffer_can_write(accum)) {
+            buffer_write(accum, c);
+        }
+    }
+
     return st;
 }
 
