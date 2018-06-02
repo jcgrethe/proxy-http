@@ -23,6 +23,7 @@
 #include <strings.h>
 #include <errno.h>
 #include <ctype.h>
+#include <signal.h>
 
 #include "../selector.h"
 #include "sctp_integration.h"
@@ -45,6 +46,11 @@ void handle_metric(struct sctp_data * data);
 void handle_config(struct sctp_data * data);
 void handle_sys(struct sctp_data * data);
 void handle_badrequest(struct sctp_data * data);
+static void sigpipe_handler();
+
+// Global variables for handling SIPIPE property.
+struct selector_key * current_key;
+int current_client;
 
 static const struct fd_handler sctp_handler = {
         .handle_read   = sctp_read,
@@ -52,6 +58,22 @@ static const struct fd_handler sctp_handler = {
         .handle_close  = sctp_close,
         .handle_block  = NULL,
 };
+
+static void sigpipe_handler() {
+    printf("Handling sigpipe of %d", current_client);
+//    selector_set_interest(current_key->s, current_key->fd, OP_NOOP);
+    if (selector_set_interest(current_key->s, current_key->fd, OP_NOOP) != SELECTOR_SUCCESS){
+//        selector_unregister_fd(current_key->s, current_client);
+        printf("Cant change operation");
+        exit(0);
+    }else{
+//        selector_unregister_fd(current_key->s, current_client);
+//        close(&current_client);
+        exit(0);
+    }
+//    selector_unregister_fd(current_key->s, current_client);
+//    close(current_client);
+}
 
 // management struct functions.
 struct sctp_data * new_sctp_data(const int client_fd){
@@ -92,8 +114,18 @@ void sctp_passive_accept(struct selector_key *key){
         goto fail;
     }
 
+
     memcpy(&data_struct->client_addr, &client_addr, client_addr_len);
     data_struct->client_addr_len = client_addr_len;
+
+//    signal(SIGPIPE, SIG_IGN);
+    //Handling SIGPIPE signals for avoiding killing server
+    struct sigaction sa;
+    sa.sa_handler = sigpipe_handler;
+    sa.sa_flags = 0;
+    if (sigaction(SIGPIPE, &sa, 0) == -1) {
+        perror("sigaction");
+    }
 
     if(SELECTOR_SUCCESS != selector_register(key->s, client, &sctp_handler,
                                              OP_READ, data_struct)) {
@@ -114,11 +146,14 @@ void sctp_passive_accept(struct selector_key *key){
 void sctp_read(struct selector_key *key){
 	printf("reading...\n");
 
+	current_key = key;
+	current_client = key->fd;
+
 	//Getting data
 	struct sctp_data *data = ATTACHMENT(key);	//Obtiene la data dentro de la key
 	//set interest OP WRITE tells to the selector that you are going to write and after this it calls sctp_write
 	//Thats why you have to save things on buffers in data structure    
-    if (handle_request(data) < 0 || selector_set_interest(key->s, key->fd, OP_WRITE) != SELECTOR_SUCCESS){
+    if (handle_request(data) <= 0 || selector_set_interest(key->s, key->fd, OP_WRITE) != SELECTOR_SUCCESS){
         selector_unregister_fd(key->s, data->client_fd);
     };
 }
@@ -142,9 +177,12 @@ void sctp_write(struct selector_key *key){
 	if (ret>0){
 		printf("Sended.\n");
 	}
-	if(data->datagram.type != 3 || data->datagram.command != 2)
-        selector_set_interest(key->s, key->fd, OP_READ);    //Get ready for listen the next request
-    else{
+	if(data->datagram.type != 3 || data->datagram.command != 2) {
+        if (selector_set_interest(key->s, key->fd, OP_READ) != SELECTOR_SUCCESS) {
+            selector_unregister_fd(key->s, data->client_fd);
+        }
+//	    selector_set_interest(key->s, key->fd, OP_READ);    //Get ready for listen the next request
+    }else{
 //        close(data->client_fd);
 //        selector_set_interest(key->s, key->fd, OP_NOOP);    //Get ready for listen the next request
         selector_unregister_fd(key->s, data->client_fd);
@@ -168,8 +206,6 @@ int handle_request(struct sctp_data *data){
     ssize_t length;
     char c;
     int i = 0;
-    
-    // while(1){
         length = sctp_recvmsg(data->client_fd, ptr, count, NULL, 0, &sndrcvinfo, &flags);
         if (length <= 0){
             return 0;
@@ -209,7 +245,6 @@ int handle_request(struct sctp_data *data){
             }
         }
   		printf("Datagram Header for send: %i %i %i %i\n", data->datagram.type, data->datagram.command, data->datagram.argsq, data->datagram.code);
-    // }
     return 1; 
 }
 
