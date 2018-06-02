@@ -509,19 +509,26 @@ static void *
 request_resolv_blocking(void *data) {
     struct selector_key *key = (struct selector_key *) data;
     struct http       *s   = ATTACHMENT(key);
-    struct addrinfo hints;
     void *ptr;
     pthread_detach(pthread_self());
     s->origin_resolution = 0;
-    memset (&hints, 0, sizeof (hints));
-    hints.ai_family = AF_INET;
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_flags |= AI_CANONNAME;
+    s->origin_resolution = 0;
+    struct addrinfo hints = {
+            .ai_family    = AF_INET,    /* Allow IPv4*/
+            .ai_socktype  = SOCK_STREAM,  /* Datagram socket */
+            .ai_flags     = AI_PASSIVE,   /* For wildcard IP address */
+            .ai_protocol  = 0,            /* Any protocol */
+            .ai_canonname = NULL,
+            .ai_addr      = NULL,
+            .ai_next      = NULL,
+    };
 
     char buff[7];
-    snprintf(buff, sizeof(buff), "%d", s->client.request.request.port);
+    snprintf(buff, sizeof(buff), "%hu", s->client.request.request.port);
     char addrstr[100];
-    getaddrinfo(s->client.request.request.host, NULL, &hints, &s->origin_resolution);
+    if(  0!=  getaddrinfo(s->client.request.request.host, buff, &hints, &s->origin_resolution)){
+        printf("ERROR DOMAIN\n");
+    }
 //    inet_ntop (s->origin_resolution->ai_family, s->origin_resolution->ai_addr->sa_data, addrstr, 100);
 //    ptr = &((struct sockaddr_in *) s->origin_resolution->ai_addr)->sin_addr;
 //    inet_ntop (s->origin_resolution->ai_family, ptr, addrstr, 100);
@@ -548,6 +555,10 @@ request_resolv_done(struct selector_key *key) {
         freeaddrinfo(s->origin_resolution);
         s->origin_resolution = 0;
     }
+    if (SELECTOR_SUCCESS != selector_set_interest_key(key, OP_WRITE)) {
+        return ERROR;
+    }
+
 
     return request_connect(key, d);
 }
@@ -628,7 +639,6 @@ request_connecting_init(const unsigned state, struct selector_key *key) {
     d->origin_fd = &ATTACHMENT(key)->origin_fd;
     d->status = &ATTACHMENT(key)->client.request.status;
     d->wb = &ATTACHMENT(key)->write_buffer;
-//    selector_set_interest_key(key, OP_WRITE);
 
 }
 
@@ -636,11 +646,11 @@ request_connecting_init(const unsigned state, struct selector_key *key) {
 static unsigned
 request_connecting(struct selector_key *key) {
     struct request_st *buf = &ATTACHMENT(key)->client.request;
+
     int error;
     socklen_t len = sizeof(error);
-    buffer *b = buf->wb;
     struct connecting *d = &ATTACHMENT(key)->orig.conn;
-    struct request_st *data = &ATTACHMENT(key)->client.request;
+
     if (getsockopt(key->fd, SOL_SOCKET, SO_ERROR, &error, &len) < 0) {
         *d->status = status_general_SOCKS_server_failure;
     } else {
@@ -657,12 +667,10 @@ request_connecting(struct selector_key *key) {
 //        abort(); // el buffer tiene que ser mas grande en la variable
 //    }
     while (buffer_can_read(&buf->accum)){
-        buffer_write(b,buffer_read(&buf->accum));
+        buffer_write(d->wb,buffer_read(&buf->accum));
     }
     selector_status s = 0;
-    s |= selector_set_interest(key->s, *d->client_fd, OP_WRITE);
-    s |= selector_set_interest_key(key, OP_NOOP);
-    //   selector_set_interest_key(key, OP_WRITE);
+    s |= selector_set_interest(key->s, *d->origin_fd, OP_WRITE);
     return SELECTOR_SUCCESS == s ? REQUEST_WRITE : ERROR;
 }
 
@@ -680,7 +688,6 @@ request_write(struct selector_key *key) {
     uint8_t *ptr;
     size_t count;
     ssize_t n;
-
     ptr = buffer_read_ptr(b, &count);
     n = send(key->fd, ptr, count, MSG_NOSIGNAL);
     if (n == -1) {

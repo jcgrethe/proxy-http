@@ -61,7 +61,8 @@ enum request_state
     request_dstaddr_fqdn,
     request_dstaddr,
     request_dstport,
-
+    request_last_crlf,
+    LF_end,
     // apartir de aca están done
     request_done,
 

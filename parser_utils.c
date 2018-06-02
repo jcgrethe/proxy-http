@@ -138,6 +138,7 @@ parser_utils_strcmpi(const char *s) {
 
 void
 parser_utils_strcmpi_destroy(const struct parser_definition *p) {
+
     free((void *)p->states[0]);
     free((void *)p->states);
 //    free((void *)p->states_n);

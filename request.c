@@ -288,6 +288,20 @@ CRLF(const uint8_t c, struct request_parser *p) {
 
     return next;
 }
+static enum request_state
+CREND(const uint8_t c, struct request_parser *p) {
+    if(c=='\r'){
+        return LF_end;
+    }
+    return request_error;
+}
+static enum request_state
+LFEND(const uint8_t c, struct request_parser *p) {
+    if (c=='\n'){
+        return request_done;
+    }
+    return request_error;
+}
 
 char *strtolower(char *s) {
 
@@ -450,7 +464,7 @@ empty_line(const uint8_t c, struct request_parser *p) {
 
     if (c == '\n') {
 
-        return request_done;
+        return request_last_crlf;
     }
 
     return request_error;
@@ -500,6 +514,12 @@ request_parser_feed(struct request_parser *p, const uint8_t c) {
             break;
         case request_SP_AFTER_TARGET:
             next = single_space(c, p, request_SP_AFTER_TARGET);
+            break;
+        case request_last_crlf:
+            next=CREND(c, p);
+            break;
+        case LF_end:
+            next=LFEND(c, p);
             break;
         case request_done:
         case request_error:
