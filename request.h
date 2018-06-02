@@ -57,6 +57,7 @@ enum request_state
     request_OWS_after_value,
     request_waiting_for_LF,
     request_empty_line_waiting_for_LF,
+    request_no_empty_host,
 
     request_dstaddr_fqdn,
     request_dstaddr,
@@ -90,6 +91,10 @@ struct request_parser
 
     /** http parser for method, http version **/
     struct parser *http_sub_parser;
+
+    int host_field_value_complete;
+
+    int value_len;
 };
 
 /*
@@ -121,7 +126,7 @@ void request_parser_init(struct request_parser *p);
 
 /** entrega un byte al parser. retorna true si se llego al final  */
 enum request_state
-request_parser_feed(struct request_parser *p, const uint8_t c);
+request_parser_feed(struct request_parser *p, const uint8_t c, buffer *accum);
 
 /**
  * por cada elemento del buffer llama a `request_parser_feed' hasta que
