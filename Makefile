@@ -23,11 +23,14 @@ HTTP_NIO=httpnio.c
 STM=stm.c
 PARSER=parser.c
 PARSER_UTILS=parser_utils.c
+SCTP_HANDLERS=sctp/sctp_integration.c -lsctp
 
 all: $(PROXY_OUT)
 
 $(PROXY_OUT):
-	$(CC) -pthread $(MAIN) $(BUFFER) $(NETUTILS) $(PARSER) $(PARSER_UTILS) $(REQUEST) $(SELECTOR) $(HTTP) $(HTTP_NIO) $(STM) -o $(PROXY_OUT)
+	$(CC) -pthread $(MAIN) $(BUFFER) $(NETUTILS) $(PARSER) $(PARSER_UTILS) $(REQUEST) $(SELECTOR) $(HTTP) $(HTTP_NIO) $(STM) $(SCTP_HANDLERS) -o $(PROXY_OUT)
+	$(CC) -pthread sctp/sctpclnt.c sctp/handlers.c -L/usr/local/lib -lsctp -o sctpclnt
+
 
 clean:
-	rm proxy
+	rm proxy sctpclnt
