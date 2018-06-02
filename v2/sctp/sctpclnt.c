@@ -6,6 +6,13 @@
  *  M. Tim Jones <mtj@mtjones.com>
  *
  */
+//    Styles examples
+//    printf(SCOLOR SPREFIX " Succes using styles! " SSUFIX RESETCOLOR"\n");
+//    printf(ECOLOR EPREFIX " Error using styles! " ESUFIX RESETCOLOR"\n");
+//    printf(ICOLOR IPREFIX " Info using styles! " ISUFIX RESETCOLOR"\n");
+//    printf(WCOLOR WPREFIX " Warning using styles! " WSUFIX RESETCOLOR"\n");
+//    printf(TCOLOR TPREFIX " Title using styles! " TSUFIX RESETCOLOR"\n");
+//    printf(STCOLOR STPREFIX " Subtitle using styles! " STSUFIX RESETCOLOR"\n");
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,6 +25,7 @@
 #include "common.h"
 #include <netinet/sctp.h>
 #include "handlers.h"
+#include "../styles.h"
 
  #define PROXY_SCTP_PORT 1081
 
@@ -55,7 +63,6 @@ int main()
   /* Connect to the server */
   ret = connect( connSock, (struct sockaddr *)&servaddr, sizeof(servaddr) );
 
-  printf("Connected?: %d %d\n", ret, PROXY_SCTP_PORT);
   /* Enable receipt of SCTP Snd/Rcv Data via sctp_recvmsg */
   memset( (void *)&events, 0, sizeof(events) );
   events.sctp_data_io_event = 1;
@@ -66,12 +73,12 @@ int main()
   in = sizeof(status);
   ret = getsockopt( connSock, SOL_SCTP, SCTP_STATUS,
                      (void *)&status, (socklen_t *)&in);
-    
-  printf("Hi! Please login to J2M2:\n");
 
+  printf(TCOLOR TPREFIX " WELCOME TO J2M2 PROTOCOL CLIENT " TSUFIX RESETCOLOR"\n");
+  printf(STCOLOR STPREFIX " Please login " STSUFIX RESETCOLOR"\n");
   // Start J2M2 Logic
-  if(fgets(buffer, sizeof(buffer), stdin) == NULL){              
-    printf("No characters read.\n");
+  if(fgets(buffer, sizeof(buffer), stdin) == NULL){
+    printf(ECOLOR EPREFIX " No characters read " ESUFIX RESETCOLOR"\n");
   }
 
   char first[MAX_BUFFER] = {0};
@@ -84,7 +91,7 @@ int main()
         while(1){
             first[0] = NULL; second[0] = NULL; third[0] = NULL;
             if(fgets(buffer, sizeof(buffer), stdin) == NULL){
-              printf("No characters read.\n");
+              printf(ECOLOR EPREFIX " No characters read " ESUFIX RESETCOLOR"\n");
               break;
             }
             sscanf(buffer, "%s %s %s", first, second, third);
@@ -105,7 +112,7 @@ int main()
                 continue;
               }
             }else{
-              printf("Bad Request. %s %s %s\n", first, second, third);
+              printf(ECOLOR EPREFIX " Bad Request " ESUFIX RESETCOLOR"\n");
               continue;
             }
             // Recieve response
@@ -115,18 +122,18 @@ int main()
                                  (struct sockaddr *)NULL, 0, &sndrcvinfo, &flags );
             if(resp[3] == 1){
               //Response statuts OK accepted
-              printf("-OK! Response:\n %s", &resp[4]);
+              printf(ICOLOR IPREFIX ICOLOR"---Start Message---" ISUFIX "\n" SCOLOR "%s" ICOLOR IPREFIX "---End Message---"ISUFIX RESETCOLOR"\n", &resp[4]);
               if(resp[0] == 3 && resp[1] == 2){
                 close(connSock);
                 exit(0);
               }
             }else{
-              printf("Error code %i\n", resp[3]);
+              printf(ECOLOR EPREFIX " Error code %i\n " ESUFIX RESETCOLOR"\n", resp[3]);
             }
             clean(resp);
         }
       }else{
-        printf("Invalid Login.\n");
+        printf(ECOLOR EPREFIX " Invalid login. " ESUFIX RESETCOLOR"\n");
       }
     }
     close(connSock);

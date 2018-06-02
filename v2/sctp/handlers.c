@@ -16,7 +16,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
-
+#include "../styles.h"
 
 
 int handleLogin(uint8_t * second, uint8_t * third, int connSock){
@@ -28,7 +28,7 @@ int handleLogin(uint8_t * second, uint8_t * third, int connSock){
   struct sctp_status status;
   
   if(second == NULL || third == NULL){
-    printf("Invalid parameters.\n");
+    printf(ECOLOR EPREFIX " Invalid parameters. " ESUFIX RESETCOLOR"\n");
     return -1;
   } 
 
@@ -43,11 +43,11 @@ int handleLogin(uint8_t * second, uint8_t * third, int connSock){
   datagram[4 + secondLenght + thirdLenght + 1] = "\0"; 
   // Send login request
 
-  printf("...Sending Login...");
+  printf(ICOLOR IPREFIX " ...Sending login... ");
   ret = sctp_sendmsg( connSock, (const void *)datagram, datagramSize,
                          NULL, 0, 0, 0, STREAM, 0, 0 ); 
 
-  printf("OK!\n");                        
+  printf("OK!" ISUFIX RESETCOLOR"\n");
 
   /* Read and emit the status of the Socket (optional step) */
   in = sizeof(status);
@@ -62,7 +62,7 @@ int handleLogin(uint8_t * second, uint8_t * third, int connSock){
 
   if(resp[3] == 1){
     //Login accepted
-    printf("Welcome!\n");
+    printf(SCOLOR SPREFIX " Welcome! " SSUFIX RESETCOLOR"\n");
     return 1;
   }
   return 0;
@@ -73,7 +73,7 @@ int handleMetric(char * second, char * third, int connSock){
   uint8_t datagram[MAX_DATAGRAM];
   
   if (*third != NULL){
-    printf("Invalid params. %s\n", third);
+    printf(ECOLOR EPREFIX " Invalid parameters. " ESUFIX RESETCOLOR"\n");
     return 0;
   }
   if (*second == NULL){
@@ -89,7 +89,7 @@ int handleMetric(char * second, char * third, int connSock){
     }else if(strcmp(second, "connsucc") == 0){
       command = 3;
     }else{
-      printf("Invalid metric.\n");
+      printf(ECOLOR EPREFIX " Invalid metric. " ESUFIX RESETCOLOR"\n");
       return 0;
     }
   }
@@ -122,7 +122,7 @@ int handleConfig(char * second, char * third, int connSock){
     }else if(strcmp(second, "timeout") == 0){
       command = 2;
     }else{
-      printf("Invalid config.\n");
+      printf(ECOLOR EPREFIX " Invalid config. " ESUFIX RESETCOLOR"\n");
       return 0;
     }    
     if (*third != NULL){
@@ -149,7 +149,7 @@ int handleHelp(char * second, char * third, int connSock){
   int ret;
   uint8_t datagram[MAX_DATAGRAM];
   if(*second != NULL){
-    printf("Help function does not allow params!\n");
+    printf(ECOLOR EPREFIX " Parameters not allowed. " ESUFIX RESETCOLOR"\n");
     return 0;
   }
   datagram[0] = type;
@@ -176,7 +176,7 @@ int handleExit(char * second, char * third, int connSock){
   uint8_t datagram[MAX_DATAGRAM];
  
   if(*second != NULL){
-    printf("Exit function does not allow params!\n");
+    printf(ECOLOR EPREFIX " Parameters not allowed. " ESUFIX RESETCOLOR"\n");
     return 0;
   }  
 
