@@ -20,7 +20,7 @@ LF(const uint8_t c, struct request_parser *p) {
 
     if (c == '\n') {
 
-        return request_header_field_name;
+        return request_done;
 
     }
 
@@ -288,16 +288,18 @@ CRLF(const uint8_t c, struct request_parser *p) {
 
     return next;
 }
+
 static enum request_state
 CREND(const uint8_t c, struct request_parser *p) {
-    if(c=='\r'){
+    if (c == '\r') {
         return LF_end;
     }
     return request_error;
 }
+
 static enum request_state
 LFEND(const uint8_t c, struct request_parser *p) {
-    if (c=='\n'){
+    if (c == '\n') {
         return request_done;
     }
     return request_error;
@@ -327,18 +329,18 @@ header_field_name(const uint8_t c, struct request_parser *p) {
     enum request_state next;
 
     // If CRLF is found, headers field are over and this is the Empty Line.
-   if (strlen(p->header_field_name) == 0 && c == '\r') {
+    if (strlen(p->header_field_name) == 0 && c == '\r') {
 
         return request_empty_line_waiting_for_LF;
 
     }
-    if(c=='\r'){
+    if (c == '\r') {
         p->i = 0;
         memset(p->header_field_name, '\0', sizeof(MAX_HEADER_FIELD_NAME_SIZE));
         return request_waiting_for_LF;
-   }
+    }
     //TODO arreglar fix caso feliz
-    if(c==' '){
+    if (c == ' ') {
         return request_header_field_name;
     }
     if (c == ':') {
@@ -464,7 +466,8 @@ empty_line(const uint8_t c, struct request_parser *p) {
 
     if (c == '\n') {
 
-        return request_last_crlf;
+//        return request_body;
+//        return request_last_crlf;
     }
 
     return request_error;
@@ -516,10 +519,10 @@ request_parser_feed(struct request_parser *p, const uint8_t c) {
             next = single_space(c, p, request_SP_AFTER_TARGET);
             break;
         case request_last_crlf:
-            next=CREND(c, p);
+            next = CREND(c, p);
             break;
         case LF_end:
-            next=LFEND(c, p);
+            next = LFEND(c, p);
             break;
         case request_done:
         case request_error:
