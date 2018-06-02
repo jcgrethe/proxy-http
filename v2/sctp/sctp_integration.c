@@ -146,8 +146,8 @@ void sctp_write(struct selector_key *key){
         selector_set_interest(key->s, key->fd, OP_READ);    //Get ready for listen the next request
     else{
 //        close(data->client_fd);
-        selector_set_interest(key->s, key->fd, OP_NOOP);    //Get ready for listen the next request
-
+//        selector_set_interest(key->s, key->fd, OP_NOOP);    //Get ready for listen the next request
+        selector_unregister_fd(key->s, data->client_fd);
     }
 }
 
