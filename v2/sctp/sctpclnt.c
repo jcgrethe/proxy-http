@@ -97,11 +97,11 @@ int main()
                 continue;
               }
             }else if(strcmp(first, "help")==0){
-              if(handleHelp(second, third, connSock)){
+              if(!handleHelp(second, third, connSock)){
                 continue;
               }
             }else if(strcmp(first, "exit")==0){
-              if(handleExit(second, third, connSock)){
+              if(!handleExit(second, third, connSock)){
                 continue;
               }
             }else{
@@ -111,13 +111,19 @@ int main()
             // Recieve response
             flags = 0;
             uint8_t resp[MAX_BUFFER];
-            ret = sctp_recvmsg( connSock, (void *)resp, 24,
+            ret = sctp_recvmsg( connSock, (void *)resp, MAX_DATAGRAM_SIZE,
                                  (struct sockaddr *)NULL, 0, &sndrcvinfo, &flags );
             if(resp[3] == 1){
               //Response statuts OK accepted
-              printf("OK! Response: %s", &resp[4]);
-              // printDatagram(resp, 20);
+              printf("-OK! Response:\n %s", &resp[4]);
+              if(resp[0] == 3 && resp[1] == 2){
+                close(connSock);
+                exit(0);
+              }
+            }else{
+              printf("Error code %i\n", resp[3]);
             }
+            clean(resp);
         }
       }else{
         printf("Invalid Login.\n");

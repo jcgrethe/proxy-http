@@ -5,6 +5,7 @@
 #define MAX_USER	10
 #define MAX_PASS	10
 #define	START_USER	4
+#define MAX_DATAGRAM_SIZE 104
 
 #define TYPE		0
 #define COMMAND 	1

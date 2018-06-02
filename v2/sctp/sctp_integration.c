@@ -142,14 +142,20 @@ void sctp_write(struct selector_key *key){
 	if (ret>0){
 		printf("Sended.\n");
 	}
-    selector_set_interest(key->s, key->fd, OP_READ);    //Get ready for listen the next request
+	if(data->datagram.type != 3 || data->datagram.command != 2)
+        selector_set_interest(key->s, key->fd, OP_READ);    //Get ready for listen the next request
+    else{
+//        close(data->client_fd);
+        selector_set_interest(key->s, key->fd, OP_NOOP);    //Get ready for listen the next request
+
+    }
 }
 
 // When server is closing
 void sctp_close(struct selector_key *key){
     struct sctp_data *data = ATTACHMENT(key);
 
-    printf("closing!\n");
+    printf("closing %d!\n", data->client_fd);
 	free(data);
 }
 
@@ -333,11 +339,13 @@ void handle_config(struct sctp_data * data){
     }
 }
 void handle_sys(struct sctp_data * data){
-    if(data->datagram.command == 3){        //Help
+    if(data->datagram.command == 0){        //Help
         strcpy(data->datagram.message, "Commands available:\n-help\n-metric [metric name]\n-config [config name] [config value]\n-exit\n");
         data->datagram.code = 1;
     } else if(data->datagram.command == 2){ //Exit
-
+        strcpy(data->datagram.message, "Bye!\n");
+        data->datagram.code = 1;
+        //Closing socket managed after sending ok
     }
 }
 void handle_badrequest(struct sctp_data * data){

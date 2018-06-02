@@ -88,8 +88,6 @@ int handleMetric(char * second, char * third, int connSock){
       command = 2;
     }else if(strcmp(second, "connsucc") == 0){
       command = 3;
-    }else if(strcmp(second, "timealive") == 0){
-      command = 4;
     }else{
       printf("Invalid metric.\n");
       return 0;
@@ -148,12 +146,19 @@ int handleConfig(char * second, char * third, int connSock){
 
 int handleHelp(char * second, char * third, int connSock){
   char type = 3, command = 0, argsq = 0, code = 0;
-  if(second != NULL){
+  int ret;
+  uint8_t datagram[MAX_DATAGRAM];
+  if(*second != NULL){
     printf("Help function does not allow params!\n");
     return 0;
   }
+  datagram[0] = type;
+  datagram[1] = command;
+  datagram[2] = argsq;
+  datagram[3] = code;
+  ret = sctp_sendmsg( connSock, (const void *)datagram, 4,
+                      NULL, 0, 0, 0, STREAM, 0, 0 );
   return 1;
-  //Send
 }
 
 // void handleBlock(char * second, char * third, int connSock){
@@ -170,7 +175,7 @@ int handleExit(char * second, char * third, int connSock){
   char type = 3, command = 2, argsq = 0, code = 0, ret;
   uint8_t datagram[MAX_DATAGRAM];
  
-  if(second != EOF){
+  if(*second != NULL){
     printf("Exit function does not allow params!\n");
     return 0;
   }  
@@ -181,9 +186,8 @@ int handleExit(char * second, char * third, int connSock){
   datagram[3] = code;
   ret = sctp_sendmsg( connSock, (const void *)datagram, 4,
                          NULL, 0, 0, 0, STREAM, 0, 0 );    
-  //Close connection
-  close(connSock);
-  exit(0);
+  //Close connection after recieving response
+  return 1;
 }
 
 void printDatagram(uint8_t * datagram, int size){
