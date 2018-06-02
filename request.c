@@ -295,32 +295,41 @@ static enum request_state
 CRLF(const uint8_t c, struct request_parser *p) {
     enum request_state next;
 
-    // The parser should be NULL after method sub parser destruction.
-    if (p->http_sub_parser == NULL) {
-        struct parser_definition d = parser_utils_strcmpi("\r\n");
-//        struct parser_definition d = parser_utils_strcmpi("\r\n");
-        p->http_sub_parser = parser_init(parser_no_classes(), &d);
+    if (c == '\r') {
+        return LF_end;
     }
+    return request_error;
 
-    switch (parser_feed(p->http_sub_parser, c)->type) {
-        case STRING_CMP_MAYEQ:
-            next = request_CRLF;
-            break;
-        case STRING_CMP_EQ:
-            parser_utils_strcmpi_destroy(p->http_sub_parser->def);
-            parser_destroy(p->http_sub_parser);
-            next = request_header_field_name;
-            //next = request_done;
-            break;
-        case STRING_CMP_NEQ:
-        default:
-            // TODO: this can fail / start
-            parser_utils_strcmpi_destroy(p->http_sub_parser->def);
-            parser_destroy(p->http_sub_parser);
-            // TODO: this can fail / end
-            next = request_error_CRLF_not_found;
-            break;
-    }
+
+
+
+
+    // The parser should be NULL after method sub parser destruction.
+//    if (p->http_sub_parser == NULL) {
+//        struct parser_definition d = parser_utils_strcmpi("\r\n");
+////        struct parser_definition d = parser_utils_strcmpi("\r\n");
+//        p->http_sub_parser = parser_init(parser_no_classes(), &d);
+//    }
+//
+//    switch (parser_feed(p->http_sub_parser, c)->type) {
+//        case STRING_CMP_MAYEQ:
+//            next = request_CRLF;
+//            break;
+//        case STRING_CMP_EQ:
+//            parser_utils_strcmpi_destroy(p->http_sub_parser->def);
+//            parser_destroy(p->http_sub_parser);
+//            next = request_header_field_name;
+//            //next = request_done;
+//            break;
+//        case STRING_CMP_NEQ:
+//        default:
+//            // TODO: this can fail / start
+//            parser_utils_strcmpi_destroy(p->http_sub_parser->def);
+//            parser_destroy(p->http_sub_parser);
+//            // TODO: this can fail / end
+//            next = request_error_CRLF_not_found;
+//            break;
+//    }
 
     return next;
 }
@@ -336,7 +345,7 @@ CREND(const uint8_t c, struct request_parser *p) {
 static enum request_state
 LFEND(const uint8_t c, struct request_parser *p) {
     if (c == '\n') {
-        return request_done;
+        return request_header_field_name;
     }
     return request_error;
 }
@@ -571,15 +580,25 @@ request_parser_feed(struct request_parser *p, const uint8_t c, buffer *accum) {
 
                 p->host_field_value_complete = 1;
 
+                if (buffer_can_write(accum)) {
+                    buffer_write(accum, (uint8_t) ':');
+                }
+
                 int i = 0;
-                while (buffer_can_write(accum)) {
+                while (buffer_can_write(accum) && p->request->host[i] != '\0') {
                     buffer_write(accum, (uint8_t) p->request->host[i++]);
+                }
+
+                if(!buffer_can_write(accum)){
+                    next = request_error;
                 }
 
             }
 
             if(c == '\r') {
                 next = request_waiting_for_LF;
+            } else {
+                next = request_no_empty_host;
             }
 
             p->value_len++;
@@ -634,13 +653,23 @@ request_consume(buffer *b, struct request_parser *p, bool *errored, buffer *accu
         if(st != request_no_empty_host){
          if (buffer_can_write(accum)) {
                 buffer_write(accum, c);
-            }
+            } else {
+                 st = request_error;
+         }
         }
 
         if (request_is_done(st, errored)) {
             break;
         }
     }
+
+    while (buffer_can_read(b)) {
+        const uint8_t c = buffer_read(b);
+        if (buffer_can_write(accum)) {
+            buffer_write(accum, c);
+        }
+    }
+
     return st;
 }
 
