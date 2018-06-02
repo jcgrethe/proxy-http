@@ -28,7 +28,7 @@ struct sctp_data{
 
     struct datagram_struct		  datagram;
 
-    int							  is_logged	
+    int							  is_logged;
 
     // int                           argc;
     // char **                       cmd;
