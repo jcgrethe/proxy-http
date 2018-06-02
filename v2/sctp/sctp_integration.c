@@ -1,3 +1,17 @@
+/*
+ * ~J2M2 Protocol~
+ * SCTP Server for managing proxy metrics and configurations
+ * More detailed info at J2M2 Documentation
+ *
+ * Client   Server
+ * <-Connection->
+ *
+ * >v|Request---->
+ * ^<|<---Response
+ *
+ * <----End------>
+ */
+
 #include <unistd.h>
 #include <memory.h>
 #include <malloc.h>
@@ -27,6 +41,10 @@ void sctp_close(struct selector_key *key);
 int handle_request(struct sctp_data *data);
 int check_login(char message[MAX_DATAGRAM_MESSAGE]);
 void parse_datagram(struct sctp_data *data, buffer * b);
+void handle_metric(struct sctp_data * data);
+void handle_config(struct sctp_data * data);
+void handle_sys(struct sctp_data * data);
+void handle_badrequest(struct sctp_data * data);
 
 static const struct fd_handler sctp_handler = {
         .handle_read   = sctp_read,
@@ -110,7 +128,7 @@ void sctp_write(struct selector_key *key){
 	struct sctp_data *data = ATTACHMENT(key);
 	int length = 4 + strlen(data->datagram.message), ret;
 	printf("writting!\n");
-	printf("Current Datagram Header in writting: %i %i %i %i\n", data->datagram.type, data->datagram.command, data->datagram.argsq, data->datagram.code);
+	printf("Current Datagram in writting: %i %i %i %i %s\n", data->datagram.type, data->datagram.command, data->datagram.argsq, data->datagram.code, data->datagram.message);
 
 	uint8_t * buffer = malloc(length);
 	buffer[0] = data->datagram.type;
@@ -124,13 +142,15 @@ void sctp_write(struct selector_key *key){
 	if (ret>0){
 		printf("Sended.\n");
 	}
-
-	exit(0);
+    selector_set_interest(key->s, key->fd, OP_READ);    //Get ready for listen the next request
 }
 
 // When server is closing
 void sctp_close(struct selector_key *key){
-	printf("closing!\n");
+    struct sctp_data *data = ATTACHMENT(key);
+
+    printf("closing!\n");
+	free(data);
 }
 
 int handle_request(struct sctp_data *data){
@@ -166,20 +186,21 @@ int handle_request(struct sctp_data *data){
         	//Already logged & Analize request
         	switch(data->datagram.type){
               case 1: //metric 
-
-                break;
+                    handle_metric(data);
+                    break;
 
               case 2: //config
-                break;
+                    handle_config(data);
+                    break;
 
               case 3: //sys
-                break;
+                    handle_sys(data);
+                    break;
 
               default: // bad request
-                break;
+                    handle_badrequest(data);
+                    break;
             }
-
-
         }
   		printf("Datagram Header for send: %i %i %i %i\n", data->datagram.type, data->datagram.command, data->datagram.argsq, data->datagram.code);
     // }
@@ -208,11 +229,10 @@ void parse_datagram(struct sctp_data *data, buffer * b){
 			data->datagram.code = (uint8_t)buffer_read(b);
 		}else{
 			// Code not found
-		} 						
+		}
         while(buffer_can_read(b) && i < MAX_DATAGRAM_MESSAGE){
             c = buffer_read(b);
-			data->datagram.message[i++] = c; 
-            // printf("%c %i\n", c, c);
+			data->datagram.message[i++] = c;
         }
 }
 
@@ -223,4 +243,104 @@ int check_login(char message[MAX_DATAGRAM_MESSAGE]){
 		return 0;
 	}
 	return 1;
+}
+
+void handle_metric(struct sctp_data * data){
+    if(data->datagram.argsq == 0){
+        // Return all metrics
+        strcpy(data->datagram.message, "currcon = 5\nhistacc = 223\ntrabytes = 3114\nconnsucc = 54\n");
+        data->datagram.code = 1;
+    }else if(data->datagram.argsq == 1){
+        switch (data->datagram.command){
+            case 0:
+                strcpy(data->datagram.message, "currcon = 5\n");
+                data->datagram.code = 1;
+                break;
+            case 1:
+                strcpy(data->datagram.message, "histacc = 223\n");
+                data->datagram.code = 1;
+                break;
+            case 2:
+                strcpy(data->datagram.message, "trabytes = 3114\n");
+                data->datagram.code = 1;
+                break;
+            case 3:
+                strcpy(data->datagram.message, "connsucc = 54\n");
+                data->datagram.code = 1;
+                break;
+            default:
+                strcpy(data->datagram.message, "Invalid metric.\n");
+                data->datagram.code = 4;
+        }
+    }else{
+        //Bad request
+        strcpy(data->datagram.message, "Invalid metric.\n");
+        data->datagram.code = 4;
+    }
+
+}
+void handle_config(struct sctp_data * data){
+    if(data->datagram.argsq == 0){
+        // Return all current configurations
+        strcpy(data->datagram.message, "currcon = 5\nbuffsize = 223\ntimeout = 3114\nconnsucc = 54\n");
+        data->datagram.code = 1;
+    }else if(data->datagram.argsq == 1){
+        // Return
+        switch (data->datagram.command){
+            case 0:
+                strcpy(data->datagram.message, "currcon = 5\n");
+                data->datagram.code = 1;
+                break;
+            case 1:
+                strcpy(data->datagram.message, "buffsize = 5\n");
+                data->datagram.code = 1;
+                break;
+            case 2:
+                strcpy(data->datagram.message, "timeout = 5\n");
+                data->datagram.code = 1;
+                break;
+            default:
+                strcpy(data->datagram.message, "Invalid configuration.\n");
+                data->datagram.code = 4;
+        }
+    }else if(data->datagram.argsq == 2){
+        switch (data->datagram.command){
+            case 0: //Set currconn value (data->datagram.message)
+                if(1){  //Setted right
+                    strcpy(data->datagram.message, "New currconn config setted.\n");
+                    data->datagram.code = 1;
+                }
+                break;
+            case 1: //Set buffsize value
+                if(1){  //Setted right
+                    strcpy(data->datagram.message, "New buffsize config setted.\n");
+                    data->datagram.code = 1;
+                }
+                break;
+            case 2: //Set timeout value
+                if(1){  //Setted right
+                    strcpy(data->datagram.message, "New timeout config setted.\n");
+                    data->datagram.code = 1;
+                }
+                break;
+            default:
+                strcpy(data->datagram.message, "Invalid configuration.\n");
+                data->datagram.code = 4;
+        }
+    }else{
+        strcpy(data->datagram.message, "Invalid config arguments.\n");
+        data->datagram.code = 4;
+    }
+}
+void handle_sys(struct sctp_data * data){
+    if(data->datagram.command == 3){        //Help
+        strcpy(data->datagram.message, "Commands available:\n-help\n-metric [metric name]\n-config [config name] [config value]\n-exit\n");
+        data->datagram.code = 1;
+    } else if(data->datagram.command == 2){ //Exit
+
+    }
+}
+void handle_badrequest(struct sctp_data * data){
+    strcpy(data->datagram.message, "Bad Request.\n");
+    data->datagram.code = 3;
 }
