@@ -406,6 +406,8 @@ request_read(struct selector_key *key) {
         ret = ERROR;
     }
 
+
+
     return error ? ERROR : ret;
 }
 
@@ -435,10 +437,11 @@ request_process(struct selector_key *key, struct request_st *d) {
     printf("Llegó d->request.method: %d\n", d->request.method);
 
     switch (d->request.method) {
+
+        case http_method_POST:
+        case http_method_HEAD:
         case http_method_GET:
             printf("Llegó GET\n");
-//             esto mejoraría enormemente de haber usado
-//             sockaddr_storage en el request
 
 //             switch (d->request.dest_addr_type)
 //             {
@@ -450,17 +453,6 @@ request_process(struct selector_key *key, struct request_st *d) {
 //                     sizeof(d->request.dest_addr.ipv4);
 //                 memcpy(&ATTACHMENT(key)->origin_addr, &d->request.dest_addr,
 //                        sizeof(d->request.dest_addr.ipv4));
-//                 ret = request_connect(key, d);
-//                 break;
-//             }
-//             case socks_req_addrtype_ipv6:
-//             {
-//                 ATTACHMENT(key)->origin_domain = AF_INET6;
-//                 d->request.dest_addr.ipv6.sin6_port = d->request.dest_port;
-//                 ATTACHMENT(key)->origin_addr_len =
-//                     sizeof(d->request.dest_addr.ipv6);
-//                 memcpy(&ATTACHMENT(key)->origin_addr, &d->request.dest_addr,
-//                        sizeof(d->request.dest_addr.ipv6));
 //                 ret = request_connect(key, d);
 //                 break;
 //             }
@@ -493,8 +485,8 @@ request_process(struct selector_key *key, struct request_st *d) {
 //             }
 //             }
             break;
-        case http_method_HEAD:
-        case http_method_POST:
+
+
         default:
             printf("Llegó request_process default\n");
 
@@ -676,6 +668,9 @@ request_connecting(struct selector_key *key) {
     while (buffer_can_read(&buf->accum)){
         buffer_write(d->wb,buffer_read(&buf->accum));
     }
+
+
+
     selector_status s = 0;
     s |= selector_set_interest(key->s, *d->origin_fd, OP_WRITE);
     return SELECTOR_SUCCESS == s ? REQUEST_WRITE : ERROR;
@@ -694,6 +689,7 @@ request_write(struct selector_key *key) {
     uint8_t *ptr;
     size_t count;
     ssize_t n;
+
     ptr = buffer_read_ptr(b, &count);
     n = send(key->fd, ptr, count, MSG_NOSIGNAL);
     if (n == -1) {

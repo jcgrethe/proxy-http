@@ -26,5 +26,10 @@ add_executable(v2
         selector.c
         selector.h
         stm.c
-        stm.h)
+        stm.h
+        sctp/sctp_integration.c
+        sctp/sctp_integration.h
+        )
+target_link_libraries(v2 -L/usr/local/lib)
+target_link_libraries(v2 -lsctp)
 target_link_libraries (v2 ${CMAKE_THREAD_LIBS_INIT})

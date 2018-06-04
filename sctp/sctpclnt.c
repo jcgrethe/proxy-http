@@ -27,6 +27,7 @@
 #include "handlers.h"
 #include "../styles.h"
 
+
 #define PROXY_SCTP_PORT 1081
 
 union ans{
@@ -36,7 +37,10 @@ union ans{
 
 typedef union ans * answer;
 
-int main() {
+ #define DEFAULT_PORT 1081
+ #define DEFAULT_IP "127.0.0.1"
+
+int main(int argc, char * argv[]) {
   int connSock, in, i, ret, flags;
   int *position;
   struct sockaddr_in servaddr;
@@ -48,6 +52,42 @@ int main() {
 
   clean(buffer);
   position = 0;
+
+  int port;
+  char address[16];
+  if(argc == 3){    //Custom port and ip
+    int port_in = atoi( argv[2] );
+    if(validIpAddress(argv[1])){
+      strcpy(address, argv[1]);
+    }else{
+      printf(ICOLOR IPREFIX " Bad IP argument, using default value. " ISUFIX RESETCOLOR"\n");
+      strcpy(address, DEFAULT_IP);  //Localhost
+    }
+    if(port_in > 1024 && port_in < 60000){  //Valid ports
+      port = port_in;
+    }else{
+      printf(ICOLOR IPREFIX " Bad PORT argument, using default value. " ISUFIX RESETCOLOR"\n");
+      port = DEFAULT_PORT;
+    }
+  }else if(argc == 2){  //Custom port
+    int port_in = atoi( argv[1] );
+    strcpy(address, DEFAULT_IP);
+    if(port_in > 1024 && port_in < 60000){  //Valid ports
+      port = port_in;
+    }else{
+      printf(ICOLOR IPREFIX " Bad PORT argument, using default value. " ISUFIX RESETCOLOR"\n");
+      port = DEFAULT_PORT;
+    }
+  }else{  //Default values
+    if(argc == 1)
+      printf(ICOLOR IPREFIX " No arguments, using default values. " ISUFIX RESETCOLOR"\n");
+    else
+      printf(ICOLOR IPREFIX " Bad arguments, using default values. " ISUFIX RESETCOLOR"\n");
+    strcpy(address, DEFAULT_IP);
+    port = DEFAULT_PORT;
+  }
+  printf(ICOLOR IPREFIX " Trying to connect to %s:%d " ISUFIX RESETCOLOR"\n", address, port);
+
 
   /* Create an SCTP TCP-Style Socket */
   connSock = socket(AF_INET, SOCK_STREAM, IPPROTO_SCTP);
@@ -63,8 +103,8 @@ int main() {
   /* Specify the peer endpoint to which we'll connect */
   bzero((void *) &servaddr, sizeof(servaddr));
   servaddr.sin_family = AF_INET;
-  servaddr.sin_port = htons(PROXY_SCTP_PORT);
-  servaddr.sin_addr.s_addr = inet_addr("127.0.0.1");
+  servaddr.sin_port = htons(port);
+  servaddr.sin_addr.s_addr = inet_addr(address);
 
   /* Connect to the server */
   ret = connect(connSock, (struct sockaddr *) &servaddr, sizeof(servaddr));
@@ -198,3 +238,9 @@ void to_buffer(uint8_t * buf, uint8_t cpy[], int len, int * position){
   return;
 }
 
+int validIpAddress(char * ipAddress)
+{
+  struct sockaddr_in sa;
+  int result = inet_pton(AF_INET, ipAddress, &(sa.sin_addr));
+  return result != 0;
+}
