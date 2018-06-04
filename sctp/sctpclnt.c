@@ -27,7 +27,15 @@
 #include "handlers.h"
 #include "../styles.h"
 
- #define PROXY_SCTP_PORT 1081
+#define PROXY_SCTP_PORT 1081
+#define START_BYTES     4
+
+union ans{
+    unsigned long long int lng;
+    uint8_t                arr[8];
+};
+
+typedef union ans * answer;
 
 int main() {
   int connSock, in, i, ret, flags;
@@ -124,21 +132,34 @@ int main() {
         }
         // Recieve response
         flags = 0;
-        uint8_t resp[MAX_BUFFER];
-        ret = sctp_recvmsg(connSock, (void *) resp, MAX_DATAGRAM_SIZE,
+        uint8_t res[MAX_BUFFER];
+        clean(res);
+        answer aux = calloc(1, sizeof(union ans));
+
+        ret = sctp_recvmsg(connSock, (void *) res, MAX_DATAGRAM_SIZE,
                            (struct sockaddr *) NULL, 0, &sndrcvinfo, &flags);
-        if (resp[3] == 1) {
-          //Response statuts OK accepted
-          printf(ICOLOR IPREFIX ICOLOR"---Start Message---" ISUFIX "\n" SCOLOR "%s" ICOLOR IPREFIX "---End Message---"ISUFIX RESETCOLOR"\n",
-                 &resp[4]);
-          if (resp[0] == 3 && resp[1] == 2) {
+
+        if (res[3] == 1) {
+          //Response statuts OK accepted. Dependes on data sent.
+          printf(ICOLOR IPREFIX ICOLOR"---Start Message---" ISUFIX "\n" SCOLOR);
+          //if metric trabytes -> uint64_t sent.
+          if(res[0] == 1 & res[1] == 2){
+            for(int i = 0; i < 8; i++){
+              aux->arr[i] = res[START_BYTES+i]; //Sending 8 bytes to union. 
+            }                                   //After that we will be ready to read the correct number.
+            printf("%llu\n", aux->lng);
+          } else {
+            printf("%u", res[START_BYTES]);
+          }
+          printf(ICOLOR IPREFIX ICOLOR"---End Message---" ISUFIX "\n" SCOLOR);
+
+          if (res[0] == 3 && res[1] == 2) {
             close(connSock);
             exit(0);
           }
         } else {
-          printf(ECOLOR EPREFIX " Error code %i\n " ESUFIX RESETCOLOR"\n", resp[3]);
+          printf(ECOLOR EPREFIX " Error code %i\n " ESUFIX RESETCOLOR"\n", res[3]);
         }
-        clean(resp);
       }
     } else {
       printf(ECOLOR EPREFIX " Invalid login. " ESUFIX RESETCOLOR"\n");

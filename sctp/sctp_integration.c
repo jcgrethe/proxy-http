@@ -25,6 +25,7 @@
 #include <ctype.h>
 #include <signal.h>
 
+#include "metrics_struct.h"
 #include "../selector.h"
 #include "sctp_integration.h"
 #include "common.h"
@@ -46,11 +47,16 @@ void handle_metric(struct sctp_data * data);
 void handle_config(struct sctp_data * data);
 void handle_sys(struct sctp_data * data);
 void handle_badrequest(struct sctp_data * data);
+void clean(uint8_t * buf);
+void to_8(uint8_t * buf, uint8_t val[]);
+
 static void sigpipe_handler();
 
 // Global variables for handling SIPIPE property.
 struct selector_key * current_key;
 int current_client;
+//metrics metrstr;
+//tfbyte tf;
 
 static const struct fd_handler sctp_handler = {
         .handle_read   = sctp_read,
@@ -94,7 +100,7 @@ void sctp_passive_accept(struct selector_key *key){
 	
 	struct sockaddr_storage       client_addr;
 	socklen_t                     client_addr_len = sizeof(client_addr);
-	struct sctp_data                  * data_struct           = NULL;
+	struct sctp_data              * data_struct           = NULL;
 
     const int client = accept(key->fd, (struct sockaddr*) &client_addr,
                               &client_addr_len);
@@ -163,7 +169,8 @@ void sctp_write(struct selector_key *key){
 	struct sctp_data *data = ATTACHMENT(key);
 	int length = 4 + strlen(data->datagram.message), ret;
 	printf("writting!\n");
-	printf("Current Datagram in writting: %i %i %i %i %s\n", data->datagram.type, data->datagram.command, data->datagram.argsq, data->datagram.code, data->datagram.message);
+	printf("Current Datagram in writting: %i %i %i %i %s\n", data->datagram.type, 
+        data->datagram.command, data->datagram.argsq, data->datagram.code, data->datagram.message);
 
 	uint8_t * buffer = malloc(length);
 	buffer[0] = data->datagram.type;
@@ -175,7 +182,7 @@ void sctp_write(struct selector_key *key){
 	ret = sctp_sendmsg( data->client_fd, (void *) buffer, length ,
                           NULL, 0, 0, 0, STREAM, 0, 0 );
 	if (ret>0){
-		printf("Sended.\n");
+		printf("Sent.\n");
 	}
 	if(data->datagram.type != 3 || data->datagram.command != 2) {
         if (selector_set_interest(key->s, key->fd, OP_READ) != SELECTOR_SUCCESS) {
@@ -287,30 +294,29 @@ int check_login(char message[MAX_DATAGRAM_MESSAGE]){
 }
 
 void handle_metric(struct sctp_data * data){
+    clean(data->datagram.message);
     if(data->datagram.argsq == 0){
-        // Return all metrics
-        strcpy(data->datagram.message, "currcon = 5\nhistacc = 223\ntrabytes = 3114\nconnsucc = 54\n");
+        strcpy(data->datagram.message, "all Metrics");
         data->datagram.code = 1;
-    }else if(data->datagram.argsq == 1){
+    }else if(data->datagram.argsq == 1){  
         switch (data->datagram.command){
             case 0:
-                strcpy(data->datagram.message, "currcon = 5\n");
+                data->datagram.message[0] = metrstr->currcon;
                 data->datagram.code = 1;
                 break;
             case 1:
-                strcpy(data->datagram.message, "histacc = 223\n");
+                data->datagram.message[0] = metrstr->histacc;
                 data->datagram.code = 1;
                 break;
             case 2:
-                strcpy(data->datagram.message, "trabytes = 3114\n");
+                memcpy(data->datagram.message, metrstr->transfby->tfbyt_8,NUMBYTES);
                 data->datagram.code = 1;
                 break;
             case 3:
-                strcpy(data->datagram.message, "connsucc = 54\n");
+                data->datagram.message[0] = metrstr->connsucc;
                 data->datagram.code = 1;
                 break;
             default:
-                strcpy(data->datagram.message, "Invalid metric.\n");
                 data->datagram.code = 4;
         }
     }else{
@@ -318,8 +324,8 @@ void handle_metric(struct sctp_data * data){
         strcpy(data->datagram.message, "Invalid metric.\n");
         data->datagram.code = 4;
     }
-
 }
+
 void handle_config(struct sctp_data * data){
     if(data->datagram.argsq == 0){
         // Return all current configurations
@@ -329,7 +335,7 @@ void handle_config(struct sctp_data * data){
         // Return
         switch (data->datagram.command){
             case 0:
-                strcpy(data->datagram.message, "currcon = 5\n");
+                //strcpy(data->datagram.message, "currcon = 5\n");
                 data->datagram.code = 1;
                 break;
             case 1:
@@ -373,6 +379,7 @@ void handle_config(struct sctp_data * data){
         data->datagram.code = 4;
     }
 }
+
 void handle_sys(struct sctp_data * data){
     if(data->datagram.command == 0){        //Help
         strcpy(data->datagram.message, "Commands available:\n-help\n-metric [metric name]\n-config [config name] [config value]\n-exit\n");
@@ -383,7 +390,20 @@ void handle_sys(struct sctp_data * data){
         //Closing socket managed after sending ok
     }
 }
+
 void handle_badrequest(struct sctp_data * data){
     strcpy(data->datagram.message, "Bad Request.\n");
     data->datagram.code = 3;
+}
+
+void clean(uint8_t * buf){
+    for(int i = 0; i < MAX_DATAGRAM_MESSAGE; i++){
+        buf[i] = 0;
+    }
+}
+
+void to_8(uint8_t buf[], uint8_t val[]){
+    for(int i = 8, j = 0; i > 0 && j < 8; i++, j--){
+        buf[i] = val[j];
+    }
 }

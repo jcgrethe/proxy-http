@@ -18,6 +18,7 @@
 #include "stm.h"
 #include "httpnio.h"
 #include "netutils.h"
+#include "sctp/metrics_struct.h"
 
 #define N(x) (sizeof(x) / sizeof((x)[0]))
 
@@ -682,7 +683,6 @@ void log_request(enum socks_response_status status,
 static unsigned
 request_write(struct selector_key *key) {
     struct request_st *d = &ATTACHMENT(key)->client.request;
-
     unsigned ret = REQUEST_WRITE;
     buffer *b = d->wb;
     uint8_t *ptr;

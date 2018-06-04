@@ -26,10 +26,15 @@
 #include "http.h"
 #include "selector.h"
 #include "httpnio.h"
+#include "sctp/metrics_struct.h"
 
 #include "sctp/sctp_integration.h"
 
 static bool done = false;
+
+/* Global metrics structures. */
+metrics metrstr;
+tfbyte tf;
 
 static void
 sigterm_handler(const int signal) {
@@ -120,6 +125,11 @@ main(const int argc, const char **argv) {
     }
     // check with: sudo nmap -sY localhost -PY -p 1081
 
+    /* Here we initialize struct to take some metrics. */
+    metrstr = calloc(INSTANCES, sizeof(struct metric));
+    tf = calloc(INSTANCES, sizeof(union tfby_8));
+    metrstr->transfby = tf;
+
     // registrar sigterm es útil para terminar el programa normalmente.
     // esto ayuda mucho en herramientas como valgrind.
     signal(SIGTERM, sigterm_handler);
@@ -169,9 +179,6 @@ main(const int argc, const char **argv) {
         goto finally;
     }
 
-
-
-
     for(;!done;) {
         err_msg = NULL;
         ss = selector_select(selector);
@@ -185,6 +192,7 @@ main(const int argc, const char **argv) {
     }
 
     int ret = 0;
+
 finally:
     if(ss != SELECTOR_SUCCESS) {
         fprintf(stderr, "%s: %s\n", (err_msg == NULL) ? "": err_msg,
