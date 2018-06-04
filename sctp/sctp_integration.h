@@ -1,12 +1,11 @@
-
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <netinet/sctp.h>
 #include "../selector.h"
 #include "../buffer.h"
 
-#define BUFFER_SIZE 1024*1024
-#define MAX_DATAGRAM_MESSAGE 100
+#define BUFFER_SIZE 512*1024
+#define MAX_DATAGRAM_MESSAGE 1024*1024
 
 void sctp_passive_accept(struct selector_key *key);
 struct datagram_struct{
@@ -14,10 +13,10 @@ struct datagram_struct{
 	uint8_t command;
 	uint8_t argsq;
 	uint8_t code;
-
 	// Message
-	char message[MAX_DATAGRAM_MESSAGE];
+	uint8_t message[MAX_DATAGRAM_MESSAGE];
 };
+
 struct sctp_data{
     struct sockaddr_storage       client_addr;
     socklen_t                     client_addr_len;
@@ -30,10 +29,10 @@ struct sctp_data{
 
     int							  is_logged;
 
+
     // int                           argc;
     // char **                       cmd;
     // enum helper_errors            error;
-
     // char *                        user;
 };
 

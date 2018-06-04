@@ -25,6 +25,7 @@
 #include <ctype.h>
 #include <signal.h>
 
+#include "metrics_struct.h"
 #include "../selector.h"
 #include "sctp_integration.h"
 #include "common.h"
@@ -35,6 +36,7 @@
 
 #define USER "admin"
 #define PASS "admin"
+#define UNIT 1
 
 void sctp_read(struct selector_key *key);
 void sctp_write(struct selector_key *key);
@@ -46,11 +48,15 @@ void handle_metric(struct sctp_data * data);
 void handle_config(struct sctp_data * data);
 void handle_sys(struct sctp_data * data);
 void handle_badrequest(struct sctp_data * data);
+void clean(uint8_t * buf);
+
 static void sigpipe_handler();
 
 // Global variables for handling SIPIPE property.
 struct selector_key * current_key;
 int current_client;
+//metrics metrstr;
+//tfbyte tf;
 
 static const struct fd_handler sctp_handler = {
         .handle_read   = sctp_read,
@@ -94,7 +100,7 @@ void sctp_passive_accept(struct selector_key *key){
 	
 	struct sockaddr_storage       client_addr;
 	socklen_t                     client_addr_len = sizeof(client_addr);
-	struct sctp_data                  * data_struct           = NULL;
+	struct sctp_data              * data_struct           = NULL;
 
     const int client = accept(key->fd, (struct sockaddr*) &client_addr,
                               &client_addr_len);
@@ -162,8 +168,9 @@ void sctp_read(struct selector_key *key){
 void sctp_write(struct selector_key *key){
 	struct sctp_data *data = ATTACHMENT(key);
 	int length = 4 + strlen(data->datagram.message), ret;
-	printf("writting!\n");
-	printf("Current Datagram in writting: %i %i %i %i %s\n", data->datagram.type, data->datagram.command, data->datagram.argsq, data->datagram.code, data->datagram.message);
+	printf("Writing Datagram: %u %u %u %u %llu %u %u %u\n", data->datagram.type, 
+        data->datagram.command, data->datagram.argsq, data->datagram.code, data->datagram.message,
+        data->datagram.message[START_CURR], data->datagram.message[START_HIS], data->datagram.message[START_SUC]);
 
 	uint8_t * buffer = malloc(length);
 	buffer[0] = data->datagram.type;
@@ -175,7 +182,7 @@ void sctp_write(struct selector_key *key){
 	ret = sctp_sendmsg( data->client_fd, (void *) buffer, length ,
                           NULL, 0, 0, 0, STREAM, 0, 0 );
 	if (ret>0){
-		printf("Sended.\n");
+		printf("Sent.\n");
 	}
 	if(data->datagram.type != 3 || data->datagram.command != 2) {
         if (selector_set_interest(key->s, key->fd, OP_READ) != SELECTOR_SUCCESS) {
@@ -244,7 +251,7 @@ int handle_request(struct sctp_data *data){
                     break;
             }
         }
-  		printf("Datagram Header for send: %i %i %i %i\n", data->datagram.type, data->datagram.command, data->datagram.argsq, data->datagram.code);
+  		printf("Datagram Header: %u %u %u %u\n", data->datagram.type, data->datagram.command, data->datagram.argsq, data->datagram.code);
     return 1; 
 }
 
@@ -287,39 +294,42 @@ int check_login(char message[MAX_DATAGRAM_MESSAGE]){
 }
 
 void handle_metric(struct sctp_data * data){
+    clean(data->datagram.message);
     if(data->datagram.argsq == 0){
-        // Return all metrics
-        strcpy(data->datagram.message, "currcon = 5\nhistacc = 223\ntrabytes = 3114\nconnsucc = 54\n");
+        memcpy(data->datagram.message, metrstr->transfby->tfbyt_8, NUMBYTES);   //8bytes transferbytes
+        data->datagram.message[NUMBYTES + 1] = metrstr->currcon;                //1byte Current Connections
+        data->datagram.message[NUMBYTES + 2] = metrstr->histacc;                //1byte Historical Access
+        data->datagram.message[NUMBYTES + 3] = metrstr->connsucc;               //1byte Connections Success                                                                       //1byte Connections Success
         data->datagram.code = 1;
-    }else if(data->datagram.argsq == 1){
+        data->datagram.command = 0; 
+        data->datagram.argsq = 4;                                        
+    }else if(data->datagram.argsq == 1){  
         switch (data->datagram.command){
             case 0:
-                strcpy(data->datagram.message, "currcon = 5\n");
+                data->datagram.message[0] = metrstr->currcon;
                 data->datagram.code = 1;
                 break;
             case 1:
-                strcpy(data->datagram.message, "histacc = 223\n");
+                data->datagram.message[0] = metrstr->histacc;
                 data->datagram.code = 1;
                 break;
             case 2:
-                strcpy(data->datagram.message, "trabytes = 3114\n");
+                memcpy(data->datagram.message, metrstr->transfby->tfbyt_8, NUMBYTES);
                 data->datagram.code = 1;
                 break;
             case 3:
-                strcpy(data->datagram.message, "connsucc = 54\n");
+                data->datagram.message[0] = metrstr->connsucc;
                 data->datagram.code = 1;
                 break;
             default:
-                strcpy(data->datagram.message, "Invalid metric.\n");
                 data->datagram.code = 4;
         }
     }else{
-        //Bad request
-        strcpy(data->datagram.message, "Invalid metric.\n");
+        //Bad request. Only error code.
         data->datagram.code = 4;
     }
-
 }
+
 void handle_config(struct sctp_data * data){
     if(data->datagram.argsq == 0){
         // Return all current configurations
@@ -329,7 +339,7 @@ void handle_config(struct sctp_data * data){
         // Return
         switch (data->datagram.command){
             case 0:
-                strcpy(data->datagram.message, "currcon = 5\n");
+                //strcpy(data->datagram.message, "currcon = 5\n");
                 data->datagram.code = 1;
                 break;
             case 1:
@@ -373,6 +383,7 @@ void handle_config(struct sctp_data * data){
         data->datagram.code = 4;
     }
 }
+
 void handle_sys(struct sctp_data * data){
     if(data->datagram.command == 0){        //Help
         strcpy(data->datagram.message, "Commands available:\n-help\n-metric [metric name]\n-config [config name] [config value]\n-exit\n");
@@ -383,7 +394,15 @@ void handle_sys(struct sctp_data * data){
         //Closing socket managed after sending ok
     }
 }
+
 void handle_badrequest(struct sctp_data * data){
     strcpy(data->datagram.message, "Bad Request.\n");
     data->datagram.code = 3;
 }
+
+void clean(uint8_t * buf){
+    for(int i = 0; i < MAX_DATAGRAM_MESSAGE; i++){
+        buf[i] = 0;
+    }
+}
+

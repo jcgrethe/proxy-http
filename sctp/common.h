@@ -15,4 +15,9 @@
 #define LOGIN_RESPONSE_LEN	4
 #define COM_RESPONSE_LEN	10
 
+#define START_BYTES     4
+#define START_CURR      11
+#define START_HIS       12
+#define START_SUC       13
+
 // int log(uint8_t * buf, char * u, char * p);

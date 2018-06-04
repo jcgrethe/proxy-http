@@ -27,6 +27,16 @@
 #include "handlers.h"
 #include "../styles.h"
 
+
+#define PROXY_SCTP_PORT 1081
+
+union ans{
+    unsigned long long int lng;
+    uint8_t                arr[8];
+};
+
+typedef union ans * answer;
+
  #define DEFAULT_PORT 1081
  #define DEFAULT_IP "127.0.0.1"
 
@@ -161,21 +171,42 @@ int main(int argc, char * argv[]) {
         }
         // Recieve response
         flags = 0;
-        uint8_t resp[MAX_BUFFER];
-        ret = sctp_recvmsg(connSock, (void *) resp, MAX_DATAGRAM_SIZE,
+        uint8_t res[MAX_BUFFER];
+        clean(res);
+        answer aux = calloc(1, sizeof(union ans));
+
+        ret = sctp_recvmsg(connSock, (void *) res, MAX_DATAGRAM_SIZE,
                            (struct sockaddr *) NULL, 0, &sndrcvinfo, &flags);
-        if (resp[3] == 1) {
-          //Response statuts OK accepted
-          printf(ICOLOR IPREFIX ICOLOR"---Start Message---" ISUFIX "\n" SCOLOR "%s" ICOLOR IPREFIX "---End Message---"ISUFIX RESETCOLOR"\n",
-                 &resp[4]);
-          if (resp[0] == 3 && resp[1] == 2) {
+
+        //Response statuts OK accepted. Dependes on data sent.
+        if (res[3] == 1) {
+          printf(ICOLOR IPREFIX ICOLOR"---Start Message---" ISUFIX "\n" SCOLOR);
+          //if metric trabytes -> uint64_t sent. Else uint8_t.
+          if(res[0] == 1 && res[1] == 2){
+            for(int i = 0; i < 8; i++){
+              aux->arr[i] = res[START_BYTES+i]; //Sending 8 bytes to union. 
+            }                                   //After that we will be ready to read the correct number.
+            printf("%llu\n", aux->lng);
+          } else if(res[0] == 1 && res[1] == 0 && res[2] == 4){ //Case All metrics
+            for(int i = 0; i < 8; i++){
+              aux->arr[i] = res[START_BYTES+i]; //Sending 8 bytes to union. 
+            }
+            printf("Transfer Bytes:      %llu\n", aux->lng);                //8bytes transferbytes
+            printf("Current Connections: %u\n", res[START_CURR]);           //1byte Current Conections
+            printf("Historical Access:   %u\n", res[START_HIS]);            //1byte Historical Access
+            printf("Connection Success:  %u\n", res[START_SUC]);            //1byte Connections Success
+          } else {
+             printf("%u\n", res[START_BYTES]);
+          }
+          printf(ICOLOR IPREFIX ICOLOR"---End Message---" ISUFIX "\n" SCOLOR);
+
+          if (res[0] == 3 && res[1] == 2) {
             close(connSock);
             exit(0);
           }
         } else {
-          printf(ECOLOR EPREFIX " Error code %i\n " ESUFIX RESETCOLOR"\n", resp[3]);
+          printf(ECOLOR EPREFIX " Error code %i\n " ESUFIX RESETCOLOR"\n", res[3]);
         }
-        clean(resp);
       }
     } else {
       printf(ECOLOR EPREFIX " Invalid login. " ESUFIX RESETCOLOR"\n");
