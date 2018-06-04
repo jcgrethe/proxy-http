@@ -80,9 +80,6 @@ method(const uint8_t c, struct request_parser *p) {
                 next = request_error_unsupported_method;
                 p->request->method = -1;
             } else {
-                printf("Acá debería guardar GET\n");
-                printf("p->request->method: %d\n", p->request->method);
-
                 parser_utils_strcmpi_destroy(p->http_sub_parser->def);
                 parser_destroy(p->http_sub_parser);
                 next = request_SP_AFTER_METHOD;

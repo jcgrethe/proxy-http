@@ -21,8 +21,8 @@
 
 #define N(x) (sizeof(x) / sizeof((x)[0]))
 
-#define BUFFER_SIZE 1024 * 8
-
+#define BUFFER_SIZE 1024 * 1024
+static int n=0;
 /** maquina de estados general */
 enum http_state {
 
@@ -424,18 +424,14 @@ static unsigned
 request_process(struct selector_key *key, struct request_st *d) {
     unsigned ret;
     pthread_t tid;
-
-    printf("Llegó request_process\n");
-
-    printf("Llegó d->request.method: %d\n", d->request.method);
+    struct selector_key* k = malloc(sizeof(*key));
 
     switch (d->request.method) {
 
         case http_method_POST:
         case http_method_HEAD:
         case http_method_GET:
-            printf("Llegó GET\n");
-
+            printf("%d\n",n++);
 //             switch (d->request.dest_addr_type)
 //             {
 //             case socks_req_addrtype_ipv4:
@@ -451,7 +447,6 @@ request_process(struct selector_key *key, struct request_st *d) {
 //             }
 //             case socks_req_addrtype_domain:
 //             {
-                struct selector_key* k = malloc(sizeof(*key));
                 if(k == NULL) {
                     ret       = REQUEST_WRITE;
                     d->status = status_general_SOCKS_server_failure;
@@ -501,7 +496,6 @@ static void *
 request_resolv_blocking(void *data) {
     struct selector_key *key = (struct selector_key *) data;
     struct http       *s   = ATTACHMENT(key);
-    void *ptr;
     pthread_detach(pthread_self());
     s->origin_resolution = 0;
     s->origin_resolution = 0;
@@ -517,13 +511,9 @@ request_resolv_blocking(void *data) {
 
     char buff[7];
     snprintf(buff, sizeof(buff), "%hu", s->client.request.request.port);
-    char addrstr[100];
     if(  0!=  getaddrinfo(s->client.request.request.host, buff, &hints, &s->origin_resolution)){
-        printf("ERROR DOMAIN\n");
+        perror("Domain Error");
     }
-//    inet_ntop (s->origin_resolution->ai_family, s->origin_resolution->ai_addr->sa_data, addrstr, 100);
-//    ptr = &((struct sockaddr_in *) s->origin_resolution->ai_addr)->sin_addr;
-//    inet_ntop (s->origin_resolution->ai_family, ptr, addrstr, 100);
     selector_notify_block(key->s, key->fd);
     free(data);
 
@@ -538,6 +528,7 @@ request_resolv_done(struct selector_key *key) {
 
     if (s->origin_resolution == 0) {
         d->status = status_general_SOCKS_server_failure;
+        return ERROR;
     } else {
         s->origin_domain = s->origin_resolution->ai_family;
         s->origin_addr_len = s->origin_resolution->ai_addrlen;
@@ -608,6 +599,7 @@ request_connect(struct selector_key *key, struct request_st *d) {
             close(*fd);
             *fd = -1;
         }
+        return ERROR;
     }
     d->status = status;
 
@@ -654,12 +646,11 @@ request_connecting(struct selector_key *key) {
         }
     }
 
-//    if (-1 == request_marshall(d->wb, *d->status)) {
-//        *d->status = status_general_SOCKS_server_failure;
-//        abort(); // el buffer tiene que ser mas grande en la variable
-//    }
     while (buffer_can_read(&buf->accum)){
-        buffer_write(d->wb,buffer_read(&buf->accum));
+        if(buffer_can_write(d->wb))
+            buffer_write(d->wb,buffer_read(&buf->accum));
+        else
+            continue;
     }
 
 
