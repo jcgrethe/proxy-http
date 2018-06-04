@@ -323,6 +323,12 @@ void http_passive_accept(struct selector_key *key) {
     if (selector_fd_set_nio(client) == -1) {
         goto fail;
     }
+
+    /* Metrics Start. */
+    metrstr->currcon += 1;
+    metrstr->histacc += 1;
+    /* Metrics End  . */
+
     state = http_new(client);
     if (state == NULL) {
         // sin un estado, nos es imposible manejaro.
@@ -693,6 +699,9 @@ request_write(struct selector_key *key) {
     if (n == -1) {
         ret = ERROR;
     } else {
+        /* Metrics Start. */
+        metrstr->transfby->tfbyt_ll += n;
+        /* Metrics end.   */
         buffer_read_adv(b, n);
 
         if (!buffer_can_read(b)) {
@@ -823,6 +832,10 @@ copy_w(struct selector_key *key) {
             d->other->duplex &= ~OP_READ;
         }
     } else {
+        /* Metrics Start. */
+        metrstr->transfby->tfbyt_ll += n;
+        /* Metrics end.   */
+
         buffer_read_adv(b, n);
     }
     copy_compute_interests(key->s, d);
@@ -928,4 +941,9 @@ http_done(struct selector_key *key) {
             close(fds[i]);
         }
     }
+
+    /* Metrics Start. */
+    metrstr->currcon -= 1;
+    metrstr->connsucc += 1;
+    /* Metrics End  . */
 }

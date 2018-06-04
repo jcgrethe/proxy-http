@@ -28,7 +28,6 @@
 #include "../styles.h"
 
 #define PROXY_SCTP_PORT 1081
-#define START_BYTES     4
 
 union ans{
     unsigned long long int lng;
@@ -139,17 +138,25 @@ int main() {
         ret = sctp_recvmsg(connSock, (void *) res, MAX_DATAGRAM_SIZE,
                            (struct sockaddr *) NULL, 0, &sndrcvinfo, &flags);
 
+        //Response statuts OK accepted. Dependes on data sent.
         if (res[3] == 1) {
-          //Response statuts OK accepted. Dependes on data sent.
           printf(ICOLOR IPREFIX ICOLOR"---Start Message---" ISUFIX "\n" SCOLOR);
-          //if metric trabytes -> uint64_t sent.
-          if(res[0] == 1 & res[1] == 2){
+          //if metric trabytes -> uint64_t sent. Else uint8_t.
+          if(res[0] == 1 && res[1] == 2){
             for(int i = 0; i < 8; i++){
               aux->arr[i] = res[START_BYTES+i]; //Sending 8 bytes to union. 
             }                                   //After that we will be ready to read the correct number.
             printf("%llu\n", aux->lng);
+          } else if(res[0] == 1 && res[1] == 0 && res[2] == 4){ //Case All metrics
+            for(int i = 0; i < 8; i++){
+              aux->arr[i] = res[START_BYTES+i]; //Sending 8 bytes to union. 
+            }
+            printf("Transfer Bytes:      %llu\n", aux->lng);                //8bytes transferbytes
+            printf("Current Connections: %u\n", res[START_CURR]);           //1byte Current Conections
+            printf("Historical Access:   %u\n", res[START_HIS]);            //1byte Historical Access
+            printf("Connection Success:  %u\n", res[START_SUC]);            //1byte Connections Success
           } else {
-            printf("%u", res[START_BYTES]);
+             printf("%u\n", res[START_BYTES]);
           }
           printf(ICOLOR IPREFIX ICOLOR"---End Message---" ISUFIX "\n" SCOLOR);
 

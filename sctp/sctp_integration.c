@@ -36,6 +36,7 @@
 
 #define USER "admin"
 #define PASS "admin"
+#define UNIT 1
 
 void sctp_read(struct selector_key *key);
 void sctp_write(struct selector_key *key);
@@ -48,7 +49,6 @@ void handle_config(struct sctp_data * data);
 void handle_sys(struct sctp_data * data);
 void handle_badrequest(struct sctp_data * data);
 void clean(uint8_t * buf);
-void to_8(uint8_t * buf, uint8_t val[]);
 
 static void sigpipe_handler();
 
@@ -168,9 +168,9 @@ void sctp_read(struct selector_key *key){
 void sctp_write(struct selector_key *key){
 	struct sctp_data *data = ATTACHMENT(key);
 	int length = 4 + strlen(data->datagram.message), ret;
-	printf("writting!\n");
-	printf("Current Datagram in writting: %i %i %i %i %s\n", data->datagram.type, 
-        data->datagram.command, data->datagram.argsq, data->datagram.code, data->datagram.message);
+	printf("Writing Datagram: %u %u %u %u %llu %u %u %u\n", data->datagram.type, 
+        data->datagram.command, data->datagram.argsq, data->datagram.code, data->datagram.message,
+        data->datagram.message[START_CURR], data->datagram.message[START_HIS], data->datagram.message[START_SUC]);
 
 	uint8_t * buffer = malloc(length);
 	buffer[0] = data->datagram.type;
@@ -251,7 +251,7 @@ int handle_request(struct sctp_data *data){
                     break;
             }
         }
-  		printf("Datagram Header for send: %i %i %i %i\n", data->datagram.type, data->datagram.command, data->datagram.argsq, data->datagram.code);
+  		printf("Datagram Header: %u %u %u %u\n", data->datagram.type, data->datagram.command, data->datagram.argsq, data->datagram.code);
     return 1; 
 }
 
@@ -296,8 +296,13 @@ int check_login(char message[MAX_DATAGRAM_MESSAGE]){
 void handle_metric(struct sctp_data * data){
     clean(data->datagram.message);
     if(data->datagram.argsq == 0){
-        strcpy(data->datagram.message, "all Metrics");
+        memcpy(data->datagram.message, metrstr->transfby->tfbyt_8, NUMBYTES);   //8bytes transferbytes
+        data->datagram.message[NUMBYTES + 1] = metrstr->currcon;                //1byte Current Connections
+        data->datagram.message[NUMBYTES + 2] = metrstr->histacc;                //1byte Historical Access
+        data->datagram.message[NUMBYTES + 3] = metrstr->connsucc;               //1byte Connections Success                                                                       //1byte Connections Success
         data->datagram.code = 1;
+        data->datagram.command = 0; 
+        data->datagram.argsq = 4;                                        
     }else if(data->datagram.argsq == 1){  
         switch (data->datagram.command){
             case 0:
@@ -309,7 +314,7 @@ void handle_metric(struct sctp_data * data){
                 data->datagram.code = 1;
                 break;
             case 2:
-                memcpy(data->datagram.message, metrstr->transfby->tfbyt_8,NUMBYTES);
+                memcpy(data->datagram.message, metrstr->transfby->tfbyt_8, NUMBYTES);
                 data->datagram.code = 1;
                 break;
             case 3:
@@ -320,8 +325,7 @@ void handle_metric(struct sctp_data * data){
                 data->datagram.code = 4;
         }
     }else{
-        //Bad request
-        strcpy(data->datagram.message, "Invalid metric.\n");
+        //Bad request. Only error code.
         data->datagram.code = 4;
     }
 }
@@ -402,8 +406,3 @@ void clean(uint8_t * buf){
     }
 }
 
-void to_8(uint8_t buf[], uint8_t val[]){
-    for(int i = 8, j = 0; i > 0 && j < 8; i++, j--){
-        buf[i] = val[j];
-    }
-}
