@@ -515,7 +515,6 @@ request_resolv_blocking(void *data) {
             .ai_addr      = NULL,
             .ai_next      = NULL,
     };
-
     char buff[7];
     snprintf(buff, sizeof(buff), "%hu", s->client.request.request.port);
     if(  0!=  getaddrinfo(s->client.request.request.host, buff, &hints, &s->origin_resolution)){

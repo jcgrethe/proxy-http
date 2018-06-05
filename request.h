@@ -87,7 +87,7 @@ struct request_parser
     char header_field_value[MAX_HEADER_FIELD_VALUE_SIZE + 1];
 
     /** cuantos bytes ya leimos */
-    uint8_t i;
+    uint16_t i;
 
     /** http parser for method, http version **/
     struct parser *http_sub_parser;

@@ -109,7 +109,6 @@ int retrieveHostAndPort(struct request *req, char *URI_reference) {
     char *regexString = "^(([^:/?#]+):)?(//([^/?#]*))?([^?#]*)(\\?([^#]*))?(#(.*))?";
     size_t maxMatches = 1;
     size_t maxGroups = 10;
-
     int ret = 0;
 
     regex_t regexCompiled;
@@ -219,7 +218,7 @@ target(const uint8_t c, struct request_parser *p) {
         return next;
     }
 
-    if (p->i == (uint8_t) MAX_REQUEST_TARGET_SIZE) {
+    if (p->i ==  MAX_REQUEST_TARGET_SIZE) {
         memset(p->request_target, '\0', sizeof(MAX_REQUEST_TARGET_SIZE));
         next = request_error_too_long_request_target;
         p->i = 0;
