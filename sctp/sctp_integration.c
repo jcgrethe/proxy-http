@@ -338,10 +338,13 @@ void handle_metric(struct sctp_data * data){
 }
 
 void handle_config(struct sctp_data * data){
+    clean(data->datagram.message);
     if(data->datagram.argsq == 0){
         // Return all current configurations
-        strcpy(data->datagram.message, "currcon = 5\nbuffsize = 223\ntimeout = 3114\nconnsucc = 54\n");
+        //data->datagram.message[] = ;
+        //data->datagram.message[] = ;
         data->datagram.code = 1;
+        data->datagram.argsq == 2;
     }else if(data->datagram.argsq == 1){
         // Return
         switch (data->datagram.command){
@@ -350,15 +353,15 @@ void handle_config(struct sctp_data * data){
                 data->datagram.code = 1;
                 break;
             case 1:
-                strcpy(data->datagram.message, "buffsize = 5\n");
+                //strcpy(data->datagram.message, "buffsize = 5\n");
                 data->datagram.code = 1;
                 break;
             case 2:
-                strcpy(data->datagram.message, "timeout = 5\n");
+                //strcpy(data->datagram.message, "timeout = 5\n");
                 data->datagram.code = 1;
                 break;
             default:
-                strcpy(data->datagram.message, "Invalid configuration.\n");
+                data->datagram.argsq = 0;
                 data->datagram.code = 4;
         }
     }else if(data->datagram.argsq == 2){

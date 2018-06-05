@@ -145,20 +145,23 @@ int handleConfig(char * second, char * third, int connSock){
 }
 
 int handleHelp(char * second, char * third, int connSock){
-  char type = 3, command = 0, argsq = 0, code = 0;
-  int ret;
-  uint8_t datagram[MAX_DATAGRAM];
-  if(*second != NULL){
-    printf(ECOLOR EPREFIX " Parameters not allowed. " ESUFIX RESETCOLOR"\n");
-    return 0;
-  }
-  datagram[0] = type;
-  datagram[1] = command;
-  datagram[2] = argsq;
-  datagram[3] = code;
-  ret = sctp_sendmsg( connSock, (const void *)datagram, 4,
-                      NULL, 0, 0, 0, STREAM, 0, 0 );
-  return 1;
+  printf("\nWe are here to help you!\n");
+  
+  printf("        [Access]        \n\n");
+  printf("login  [username][password].\n\n");
+
+  printf("        [Metrics]        \n\n");
+  printf("metric [NONE] | [currcon | histacc | trabytes | connsucc].\n");
+  printf("   - metric            Shows all metrics.\n");
+  printf("   - metric currcon    Shows current http connections.\n");
+  printf("   - metric histacc    Shows historical access.\n");
+  printf("   - metric trabytes   Shows transfered bytes.\n");
+  printf("   - metric connsucc   Shows connections success.\n\n");
+
+  printf("        [System]        \n\n");
+  printf("help [NONE].\n");
+  printf("exit [NONE].\n");
+  return 0;
 }
 
 // void handleBlock(char * second, char * third, int connSock){
