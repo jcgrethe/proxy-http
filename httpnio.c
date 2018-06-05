@@ -500,13 +500,7 @@ request_process(struct selector_key *key, struct request_st *d) {
 
 
             }
-
-            buffer_write(d->wb, '\r');
-            buffer_write(d->wb, '\n');
-
-            buffer_write(d->wb, '\r');
-            buffer_write(d->wb, '\n');
-
+            
             selector_status s = 0;
             s |= selector_set_interest(key->s, *d->client_fd, OP_WRITE);
             ret = SELECTOR_SUCCESS == s ? REQUEST_WRITE : ERROR;
