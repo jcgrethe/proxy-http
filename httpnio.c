@@ -486,7 +486,7 @@ request_process(struct selector_key *key, struct request_st *d) {
             printf("Llegó request_process default\n");
 
             d->status = status_command_not_supported;
-            ret = REQUEST_WRITE;
+            ret = DONE;
             break;
     }
 
