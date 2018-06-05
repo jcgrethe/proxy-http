@@ -23,7 +23,7 @@
 
 /** loguea el request a stdout */
 void
-log_request(const enum socks_response_status status,
+log_request(const enum response_status status,
             const struct sockaddr* clientaddr,
             const struct sockaddr* originaddr) {
     char cbuff[SOCKADDR_TO_HUMAN_MIN * 2 + 2 + 32] = { 0 };

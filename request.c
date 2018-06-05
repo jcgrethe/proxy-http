@@ -676,7 +676,7 @@ request_close(struct request_parser *p) {
 
 extern int
 request_marshall(buffer *b,
-                 const enum socks_response_status status) {
+                 const enum response_status status) {
     size_t n;
     uint8_t *buff = buffer_write_ptr(b, &n);
     if (n < 10) {
@@ -697,10 +697,10 @@ request_marshall(buffer *b,
     return 10;
 }
 
-// enum socks_response_status
+// enum response_status
 // cmd_resolve(struct request* request,  struct sockaddr **originaddr,
 //             socklen_t *originlen, int *domain) {
-//     enum socks_response_status ret = status_general_SOCKS_server_failure;
+//     enum response_status ret = status_general_SOCKS_server_failure;
 //
 //     *domain                  = AF_INET;
 //     struct sockaddr *addr    = 0x00;
@@ -742,9 +742,9 @@ request_marshall(buffer *b,
 //     return ret;
 // }
 
-enum socks_response_status
+enum response_status
 errno_to_socks(const int e) {
-    enum socks_response_status ret = status_general_SOCKS_server_failure;
+    enum response_status ret = status_general_SOCKS_server_failure;
     switch (e) {
         case 0:
             ret = status_succeeded;

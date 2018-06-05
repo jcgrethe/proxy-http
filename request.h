@@ -97,28 +97,17 @@ struct request_parser
     int value_len;
 };
 
-/*
- * "...
- * 6.  Replies
- *
- * The SOCKS request information is sent by the client as soon as it has
- * established a connection to the SOCKS server, and completed the
- * authentication negotiations.  The server evaluates the request, and
- * returns a reply formed as follows:
- * ..."-- sección 6
- *
- */
-enum socks_response_status
+enum response_status
 {
-    status_succeeded = 0x00,
-    status_general_SOCKS_server_failure = 0x01,
-    status_connection_not_allowed_by_ruleset = 0x02,
-    status_network_unreachable = 0x03,
-    status_host_unreachable = 0x04,
-    status_connection_refused = 0x05,
-    status_ttl_expired = 0x06,
-    status_command_not_supported = 0x07,
-    status_address_type_not_supported = 0x08,
+    status_succeeded,
+    status_general_SOCKS_server_failure,
+    status_connection_not_allowed_by_ruleset,
+    status_network_unreachable,
+    status_host_unreachable,
+    status_connection_refused,
+    status_ttl_expired,
+    status_command_not_supported,
+    status_address_type_not_supported,
 };
 
 /** inicializa el parser */
@@ -156,17 +145,17 @@ void request_close(struct request_parser *p);
  */
 extern int
 request_marshall(buffer *b,
-                 const enum socks_response_status status);
+                 const enum response_status status);
 
-/** convierte a errno en socks_response_status */
-enum socks_response_status
+/** convierte a errno en response_status */
+enum response_status
 errno_to_socks(int e);
 
 #include <netdb.h>
 #include <arpa/inet.h>
 
 /** se encarga de la resolcuión de un request */
-enum socks_response_status
+enum response_status
 cmd_resolve(struct request *request, struct sockaddr **originaddr,
             socklen_t *originlen, int *domain);
 

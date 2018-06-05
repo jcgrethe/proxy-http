@@ -78,7 +78,6 @@ enum http_state {
      *   - OP_NOOP  sobre origin_fd
      *
      * Transiciones:
-     *   - HELLO_WRITE  mientras queden bytes por enviar
      *   - COPY         si el request fue exitoso y tenemos que copiar el
      *                  contenido de los descriptores
      *   - ERROR        ante I/O error
@@ -114,7 +113,7 @@ struct request_st {
     struct request_parser parser;
 
     /** el resumen del respuesta a enviar*/
-    enum socks_response_status status;
+    enum response_status status;
 
     // ¿a donde nos tenemos que conectar?
     struct sockaddr_storage *origin_addr;
@@ -135,7 +134,7 @@ struct connecting {
     buffer *wb;
     const int *client_fd;
     int *origin_fd;
-    enum socks_response_status *status;
+    enum response_status *status;
 };
 
 /** usado por COPY */
@@ -582,7 +581,7 @@ static unsigned
 request_connect(struct selector_key *key, struct request_st *d) {
     bool error = false;
     // da legibilidad
-    enum socks_response_status status = d->status;
+    enum response_status status = d->status;
     int *fd = d->origin_fd;
     int aux;
     *fd = socket(ATTACHMENT(key)->origin_domain, SOCK_STREAM, 0);
@@ -691,7 +690,7 @@ request_connecting(struct selector_key *key) {
     return SELECTOR_SUCCESS == s ? REQUEST_WRITE : ERROR;
 }
 
-void log_request(enum socks_response_status status,
+void log_request(enum response_status status,
                  const struct sockaddr *clientaddr,
                  const struct sockaddr *originaddr);
 
