@@ -29,6 +29,7 @@ add_executable(v2
         stm.h
         sctp/sctp_integration.c
         sctp/sctp_integration.h
+        http_codes.h
         )
 target_link_libraries(v2 -L/usr/local/lib)
 target_link_libraries(v2 -lsctp)

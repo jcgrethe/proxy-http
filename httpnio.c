@@ -19,6 +19,7 @@
 #include "httpnio.h"
 #include "netutils.h"
 #include "sctp/metrics_struct.h"
+#include "http_codes.h"
 
 #define N(x) (sizeof(x) / sizeof((x)[0]))
 
@@ -407,8 +408,9 @@ request_read(struct selector_key *key) {
     }
 
 
-
-    return error ? ERROR : ret;
+    // TODO: vuela error en rquest_consume?
+    //return error ? ERROR : ret;
+    return ret;
 }
 
 static unsigned
@@ -483,10 +485,33 @@ request_process(struct selector_key *key, struct request_st *d) {
 
 
         default:
-            printf("Llegó request_process default\n");
-
             d->status = status_command_not_supported;
-            ret = DONE;
+
+
+            char *responseString = HTTP_CODE_501;
+
+            int i;
+
+            for(i = 0 ; responseString[i] != '\0' ; i++){
+
+                if(buffer_can_write(d->wb))
+                    buffer_write(d->wb, (uint8_t) responseString[i]);
+                else
+                    continue;
+
+
+            }
+
+            buffer_write(d->wb, '\r');
+            buffer_write(d->wb, '\n');
+
+            buffer_write(d->wb, '\r');
+            buffer_write(d->wb, '\n');
+
+            selector_status s = 0;
+            s |= selector_set_interest(key->s, *d->client_fd, OP_WRITE);
+            ret = SELECTOR_SUCCESS == s ? REQUEST_WRITE : ERROR;
+
             break;
     }
 
