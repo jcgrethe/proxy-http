@@ -28,7 +28,9 @@
 #include "../styles.h"
 
 
-#define PROXY_SCTP_PORT 1081
+#define PROXY_SCTP_PORT     1081
+#define DEFAULT_PORT        1081
+#define DEFAULT_IP          "127.0.0.1"
 
 union ans{
     unsigned long long int lng;
@@ -36,9 +38,6 @@ union ans{
 };
 
 typedef union ans * answer;
-
- #define DEFAULT_PORT 1081
- #define DEFAULT_IP "127.0.0.1"
 
 int main(int argc, char * argv[]) {
   int connSock, in, i, ret, flags;
@@ -179,33 +178,37 @@ int main(int argc, char * argv[]) {
                            (struct sockaddr *) NULL, 0, &sndrcvinfo, &flags);
 
         //Response statuts OK accepted. Dependes on data sent.
-        if (res[3] == 1) {
-          printf(ICOLOR IPREFIX ICOLOR"---Start Message---" ISUFIX "\n" SCOLOR);
-          //if metric trabytes -> uint64_t sent. Else uint8_t.
-          if(res[0] == 1 && res[1] == 2){
-            for(int i = 0; i < 8; i++){
-              aux->arr[i] = res[START_BYTES+i]; //Sending 8 bytes to union. 
-            }                                   //After that we will be ready to read the correct number.
-            printf("%llu\n", aux->lng);
-          } else if(res[0] == 1 && res[1] == 0 && res[2] == 4){ //Case All metrics
-            for(int i = 0; i < 8; i++){
-              aux->arr[i] = res[START_BYTES+i]; //Sending 8 bytes to union. 
-            }
-            printf("Transfer Bytes:      %llu\n", aux->lng);                //8bytes transferbytes
-            printf("Current Connections: %u\n", res[START_CURR]);           //1byte Current Conections
-            printf("Historical Access:   %u\n", res[START_HIS]);            //1byte Historical Access
-            printf("Connection Success:  %u\n", res[START_SUC]);            //1byte Connections Success
-          } else {
-             printf("%u\n", res[START_BYTES]);
-          }
-          printf(ICOLOR IPREFIX ICOLOR"---End Message---" ISUFIX "\n" SCOLOR);
-
-          if (res[0] == 3 && res[1] == 2) {
+        if (res[TYPE] == 3 && res[COMMAND] == 2) {
+            printf("Bye!");
             close(connSock);
             exit(0);
+        }
+
+        if (res[CODE] == 1) {
+          printf(ICOLOR IPREFIX ICOLOR"---Start Message---" ISUFIX "\n" SCOLOR);
+          //if metric trabytes -> uint64_t sent. Else uint8_t.
+          if(res[TYPE] == 1 && res[COMMAND] == 2 && res[ARGSQ] == 1){
+            for(int i = 0; i < 8; i++){
+              aux->arr[i] = res[HEADERS + i];     //Sending 8 bytes to union. 
+            }                                     //After that we will be ready to read the correct number.
+            printf("%llu\n", aux->lng);
+          } else if(res[TYPE] == 1 && res[COMMAND] == 0 && res[ARGSQ] == 4){
+            uint8_t aux1 = res[HEADERS + ONE_BYTE];
+            uint8_t aux2 = res[HEADERS + ONE_BYTE + 1];
+            uint8_t aux3 = res[HEADERS + ONE_BYTE + 2];
+            for(int i = 0; i < 15; i++){        //Case All metrics
+              aux->arr[i] = res[START_BYTES+i]; //Sending 8 bytes to union.
+            }
+            printf("Transfer Bytes:      %llu\n", aux->lng);          //8bytes transferbytes
+            printf("Current Connections: %u\n", aux1);                //1byte Current Conections
+            printf("Historical Access:   %u\n", aux2);                //1byte Historical Access
+            printf("Connection Success:  %u\n", aux3);                //1byte Connections Success
+          } else if(res[ARGSQ] == 1){
+             printf("%u\n", res[START_BYTES]);
           }
+          printf(ICOLOR IPREFIX ICOLOR"---End Message---" ISUFIX "\n" RESETCOLOR);
         } else {
-          printf(ECOLOR EPREFIX " Error code %i\n " ESUFIX RESETCOLOR"\n", res[3]);
+          printf(ECOLOR EPREFIX " Error code %i\n " ESUFIX RESETCOLOR"\n", res[CODE]);
         }
       }
     } else {
