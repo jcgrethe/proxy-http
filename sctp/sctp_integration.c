@@ -34,9 +34,9 @@
 #define N(x) (sizeof(x)/sizeof((x)[0]))
 #define ATTACHMENT(key) ( (struct sctp_data *)(key)->data)
 
-#define USER "admin"
-#define PASS "admin"
-#define UNIT 1
+#define USER    "admin"
+#define PASS    "admin"
+#define UNIT    1
 
 void sctp_read(struct selector_key *key);
 void sctp_write(struct selector_key *key);
@@ -167,20 +167,22 @@ void sctp_read(struct selector_key *key){
 // When server is writting
 void sctp_write(struct selector_key *key){
 	struct sctp_data *data = ATTACHMENT(key);
-	int length = 4 + strlen(data->datagram.message), ret;
-	printf("Writing Datagram: %u %u %u %u %llu %u %u %u\n", data->datagram.type, 
+	int length = HEADERS + strlen(data->datagram.message), ret;
+
+	printf("Datagram: [%u %u %u %u] [%llu] [%u %u %u]\n", data->datagram.type, 
         data->datagram.command, data->datagram.argsq, data->datagram.code, data->datagram.message,
         data->datagram.message[START_CURR], data->datagram.message[START_HIS], data->datagram.message[START_SUC]);
 
-	uint8_t * buffer = malloc(length);
-	buffer[0] = data->datagram.type;
-	buffer[1] = data->datagram.command;
-	buffer[2] = data->datagram.argsq;
-	buffer[3] = data->datagram.code;
-	strcpy(&buffer[4], data->datagram.message);
+	uint8_t * buffer = calloc(MAX_MSG, sizeof(uint8_t));
+	buffer[TYPE] = data->datagram.type;
+	buffer[COMMAND] = data->datagram.command;
+	buffer[ARGSQ] = data->datagram.argsq;
+	buffer[CODE] = data->datagram.code;
+	memcpy(&buffer[START_BYTES], data->datagram.message, MAX_MSG);
 
 	ret = sctp_sendmsg( data->client_fd, (void *) buffer, length ,
                           NULL, 0, 0, 0, STREAM, 0, 0 );
+
 	if (ret>0){
 		printf("Sent.\n");
 	}
@@ -295,34 +297,39 @@ int check_login(char message[MAX_DATAGRAM_MESSAGE]){
 
 void handle_metric(struct sctp_data * data){
     clean(data->datagram.message);
+    data->datagram.code = 1;
     if(data->datagram.argsq == 0){
-        memcpy(data->datagram.message, metrstr->transfby->tfbyt_8, NUMBYTES);   //8bytes transferbytes
-        data->datagram.message[NUMBYTES + 1] = metrstr->currcon;                //1byte Current Connections
-        data->datagram.message[NUMBYTES + 2] = metrstr->histacc;                //1byte Historical Access
-        data->datagram.message[NUMBYTES + 3] = metrstr->connsucc;               //1byte Connections Success                                                                       //1byte Connections Success
-        data->datagram.code = 1;
+        data->datagram.message[ONE_BYTE] = metrstr->currcon;    
+        data->datagram.message[ONE_BYTE + 1] = metrstr->histacc;  
+        data->datagram.message[ONE_BYTE + 2] = metrstr->connsucc;  
+        memcpy(data->datagram.message, metrstr->transfby->tfbyt_8, NUMBYTES);   //8bytes transferbytes       
         data->datagram.command = 0; 
         data->datagram.argsq = 4;                                        
     }else if(data->datagram.argsq == 1){  
         switch (data->datagram.command){
-            case 0:
+            case CURRCON:
                 data->datagram.message[0] = metrstr->currcon;
                 data->datagram.code = 1;
+                data->datagram.argsq = 1; 
                 break;
-            case 1:
+            case HISTACC:
                 data->datagram.message[0] = metrstr->histacc;
                 data->datagram.code = 1;
+                data->datagram.argsq = 1; 
                 break;
-            case 2:
+            case TRABYTES:
                 memcpy(data->datagram.message, metrstr->transfby->tfbyt_8, NUMBYTES);
                 data->datagram.code = 1;
+                data->datagram.argsq = 1;
                 break;
-            case 3:
+            case CONNSUCC:
                 data->datagram.message[0] = metrstr->connsucc;
                 data->datagram.code = 1;
+                data->datagram.argsq = 1;
                 break;
             default:
                 data->datagram.code = 4;
+                data->datagram.argsq = 0;
         }
     }else{
         //Bad request. Only error code.
