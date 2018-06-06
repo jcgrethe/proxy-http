@@ -11,7 +11,7 @@ ifeq ($(UNAME), Linux)
 CC=gcc
 endif
 
-PROXY_OUT=proxy
+PROXY_OUT=httpd
 
 MAIN=main.c
 BUFFER=buffer.c
@@ -24,13 +24,14 @@ STM=stm.c
 PARSER=parser.c
 PARSER_UTILS=parser_utils.c
 SCTP_HANDLERS=sctp/sctp_integration.c -lsctp
+PARAMETERS=parameters.c
 
 all: $(PROXY_OUT)
 
 $(PROXY_OUT):
-	$(CC) -pthread $(MAIN) $(BUFFER) $(NETUTILS) $(PARSER) $(PARSER_UTILS) $(REQUEST) $(SELECTOR) $(HTTP) $(HTTP_NIO) $(STM) $(SCTP_HANDLERS) -o $(PROXY_OUT)
+	$(CC) -pthread $(MAIN) $(BUFFER) $(NETUTILS) $(PARSER) $(PARSER_UTILS) $(REQUEST) $(SELECTOR) $(HTTP) $(HTTP_NIO) $(STM) $(SCTP_HANDLERS) $(PARAMETERS) -o $(PROXY_OUT)
 	$(CC) -pthread sctp/sctpclnt.c sctp/handlers.c -L/usr/local/lib -lsctp -o sctpclnt
 
 
 clean:
-	rm proxy sctpclnt
+	rm httpd sctpclnt

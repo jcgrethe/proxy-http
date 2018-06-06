@@ -27,15 +27,10 @@
 #include "selector.h"
 #include "httpnio.h"
 #include "sctp/metrics_struct.h"
-
+#include "parameters.h"
 #include "sctp/sctp_integration.h"
 
-#define SCTP_DEFAULT_PORT 1081
-#define PROXY_DEFAULT_PORT 1080
-#define SCTP_OPTION_SYMBOL "-s"
-#define PROXY_OPTION_SYMBOL "-p"
 
-int validate_port(char * port);
 
 static bool done = false;
 
@@ -55,57 +50,42 @@ main(const int argc, const char **argv) {
     unsigned sctp_port;
     char ** rubbish;
 
-    if(argc == 3){    //One custom port
-        if(strcmp(argv[1], SCTP_OPTION_SYMBOL) == 0 && validate_port(argv[2])){
-            sctp_port = strtol(argv[2], rubbish, 10);
-            proxy_port = PROXY_DEFAULT_PORT;
-        }else if(strcmp(argv[1], PROXY_OPTION_SYMBOL) == 0 && validate_port(argv[2])){
-            proxy_port = strtol(argv[2], rubbish, 10);
-            sctp_port = SCTP_DEFAULT_PORT;
-        } else{
-            printf("Invalid arguments for one custom port. Using default values. \n");
-            proxy_port = PROXY_DEFAULT_PORT;
-            sctp_port = SCTP_DEFAULT_PORT;
-        }
-    } else if(argc == 5){   //Two custom ports
-        if(strcmp(argv[1], SCTP_OPTION_SYMBOL) == 0 && strcmp(argv[3], PROXY_OPTION_SYMBOL) == 0 && validate_port(argv[2]) && validate_port(argv[4])){
-            sctp_port = strtol(argv[2], rubbish, 10);
-            proxy_port = strtol(argv[4], rubbish, 10);
-        }else if(strcmp(argv[3], SCTP_OPTION_SYMBOL) == 0 && strcmp(argv[1], PROXY_OPTION_SYMBOL) == 0 && validate_port(argv[2]) && validate_port(argv[4])){
-            sctp_port = strtol(argv[4], rubbish, 10);
-            proxy_port = strtol(argv[2], rubbish, 10);
-        }else{
-            printf("Invalid arguments for two custom ports. Using default values.\n");
-            proxy_port = PROXY_DEFAULT_PORT;
-            sctp_port = SCTP_DEFAULT_PORT;
-        }
-    } else{
-        if(argc == 1)
-            printf("No arguments, using default values.\n");
-        else
-            printf("Invalid arguments, using default values.\n");
-        proxy_port = PROXY_DEFAULT_PORT;
-        sctp_port = SCTP_DEFAULT_PORT;
-    }
 
 
-//    if(argc == 1) {
-//        // utilizamos el default
-//    } else if(argc == 2) {
-//        char *end     = 0;
-//        const long sl = strtol(argv[1], &end, 10);
-//
-//        if (end == argv[1]|| '\0' != *end
-//           || ((LONG_MIN == sl || LONG_MAX == sl) && ERANGE == errno)
-//           || sl < 0 || sl > USHRT_MAX) {
-//            fprintf(stderr, "port should be an integer: %s\n", argv[1]);
-//            return 1;
+//    if(argc == 3){    //One custom port
+//        if(strcmp(argv[1], SCTP_OPTION_SYMBOL) == 0 && validate_port(argv[2])){
+//            sctp_port = strtol(argv[2], rubbish, 10);
+//            proxy_port = PROXY_DEFAULT_PORT;
+//        }else if(strcmp(argv[1], PROXY_OPTION_SYMBOL) == 0 && validate_port(argv[2])){
+//            proxy_port = strtol(argv[2], rubbish, 10);
+//            sctp_port = SCTP_DEFAULT_PORT;
+//        } else{
+//            printf("Invalid arguments for one custom port. Using default values. \n");
+//            proxy_port = PROXY_DEFAULT_PORT;
+//            sctp_port = SCTP_DEFAULT_PORT;
 //        }
-//        port = sl;
-//    } else {
-//        fprintf(stderr, "Usage: %s <port>\n", argv[0]);
-//        return 1;
+//    } else if(argc == 5){   //Two custom ports
+//        if(strcmp(argv[1], SCTP_OPTION_SYMBOL) == 0 && strcmp(argv[3], PROXY_OPTION_SYMBOL) == 0 && validate_port(argv[2]) && validate_port(argv[4])){
+//            sctp_port = strtol(argv[2], rubbish, 10);
+//            proxy_port = strtol(argv[4], rubbish, 10);
+//        }else if(strcmp(argv[3], SCTP_OPTION_SYMBOL) == 0 && strcmp(argv[1], PROXY_OPTION_SYMBOL) == 0 && validate_port(argv[2]) && validate_port(argv[4])){
+//            sctp_port = strtol(argv[4], rubbish, 10);
+//            proxy_port = strtol(argv[2], rubbish, 10);
+//        }else{
+//            printf("Invalid arguments for two custom ports. Using default values.\n");
+//            proxy_port = PROXY_DEFAULT_PORT;
+//            sctp_port = SCTP_DEFAULT_PORT;
+//        }
+//    } else{
+//        if(argc == 1)
+//            printf("No arguments, using default values.\n");
+//        else
+//            printf("Invalid arguments, using default values.\n");
+//        proxy_port = PROXY_DEFAULT_PORT;
+//        sctp_port = SCTP_DEFAULT_PORT;
 //    }
+
+    parse_options(argc, argv);
 
     // no tenemos nada que leer de stdin
     close(0);
@@ -118,13 +98,13 @@ main(const int argc, const char **argv) {
     memset(&addr, 0, sizeof(addr));
     addr.sin_family      = AF_INET;
     addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    addr.sin_port        = htons(proxy_port);
+    addr.sin_port        = htons(parameters->http_port);
 
     struct sockaddr_in addr_sctp;
     memset(&addr_sctp, 0, sizeof(addr_sctp));
     addr_sctp.sin_family      = AF_INET;
     addr_sctp.sin_addr.s_addr = htonl(INADDR_ANY);
-    addr_sctp.sin_port        = htons(sctp_port);
+    addr_sctp.sin_port        = htons(parameters->sctp_port);
 
 
     const int server = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -138,7 +118,7 @@ main(const int argc, const char **argv) {
         err_msg = "unable to create sctp socket";
         goto finally;
     }
-    fprintf(stdout, "Listening on TCP port %d for http and %d for sctp.\n", proxy_port, sctp_port);
+    fprintf(stdout, "Listening on TCP port %d for http and %d for sctp.\n", parameters->http_port, parameters->sctp_port);
 
     // man 7 ip. no importa reportar nada si falla.
     setsockopt(server, SOL_SOCKET, SO_REUSEADDR, &(int){ 1 }, sizeof(int));
@@ -257,8 +237,4 @@ finally:
         close(server);
     }
     return ret;
-}
-int validate_port(char * port){
-    char ** rubbish;
-    return strtol(port, rubbish, 10) > 1024 && strtol(port, rubbish, 10);
 }
