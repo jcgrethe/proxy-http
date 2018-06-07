@@ -596,7 +596,7 @@ request_parser_feed(struct request_parser *p, const uint8_t c, buffer *accum) {
             next=header_field_value(c, p);
             break;
         case request_connection:
-            write_buffer_string(accum,"close");
+            write_buffer_string(accum," Close");
             next=request_consume_string;
             break;
         case request_consume_string:
