@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include "./parameters.h"
 #include "styles.h"
+#include <string.h>
 void print_help();
 void print_version();
 uint16_t validate_port(char * port);
