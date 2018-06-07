@@ -403,9 +403,8 @@ header_field_name(const uint8_t c, struct request_parser *p) {
 
         } else{
             if (strcmp(aux, "connection")==0 || strcmp(aux, "proxy-connection")==0){
-                memcpy(p->request->host, p->header_field_value,  p->i + 1);
-                p->request->host[p->i] = '\0';
-                p->i=0;
+                p->i = 0;
+                memset(p->header_field_value, '\0', sizeof(MAX_HEADER_FIELD_NAME_SIZE));
                 next=request_connection;
             }else{
                 next = request_header_value;
@@ -601,8 +600,12 @@ request_parser_feed(struct request_parser *p, const uint8_t c, buffer *accum) {
             next=request_consume_string;
             break;
         case request_consume_string:
+            //if connection header is found and host too we finish parsing. If we only found connection keep parsing until host.
             if(c == '\r') {
-                next = LF_end;
+                if(strlen(p->request->host)==0)
+                    next = LF_end;
+                else
+                    next=request_waiting_for_LF;
             } else {
                 next = request_consume_string;
             }
