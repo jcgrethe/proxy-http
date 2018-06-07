@@ -400,6 +400,8 @@ request_read(struct selector_key *key) {
         buffer_write_adv(b, n);
         int st = request_consume(b, &d->parser, &error, &d->accum);
         if (request_is_done(st, 0)) {
+            d->parser.state=request_header_field_name;
+            request_consume(b, &d->parser, &error, &d->accum);
             ret = request_process(key, d);
         }
     } else {

@@ -346,19 +346,18 @@ LFEND(const uint8_t c, struct request_parser *p) {
     return request_error;
 }
 
-char *strtolower(char *s) {
+char *strtolower(char *s, int size) {
 
-    size_t len = strlen(s);
-    char *d = (char *) malloc(strlen(s));
+    char *d = (char *) calloc(1,size);
     int i = 0;
 
-    for (i = 0; i < len; i++) {
+    for (i = 0; i < size ; i++) {
 
         d[i] = (char) tolower(s[i]);
 
 
     }
-    d[i] = '\0';
+    d[size-1] = '\0';
     return d;
 }
 
@@ -389,10 +388,11 @@ header_field_name(const uint8_t c, struct request_parser *p) {
         ((uint8_t *) &(p->header_field_name))[MAX_HEADER_FIELD_NAME_SIZE] = '\0';
         p->i++;
 
-        char *aux = strtolower(p->header_field_name);
+        char *aux = strtolower(p->header_field_name,p->i);
 
         if (strcmp(aux, "host") == 0) {
-
+            p->i = 0;
+            memset(p->header_field_name, '\0', sizeof(MAX_HEADER_FIELD_NAME_SIZE));
             // Host was empty in first request line
             if (strlen(p->request->host) == 0) {
                 p->i = 0;
@@ -401,11 +401,16 @@ header_field_name(const uint8_t c, struct request_parser *p) {
                 next = request_no_empty_host;
             }
 
-        } else {
-            next = request_header_field_name;
+        } else{
+            if (strcmp(aux, "connection")==0 || strcmp(aux, "proxy-connection")==0){
+                next=request_connection;
+            }else{
+                next = request_header_value;
+            }
         }
+        memset(aux,'\0', sizeof(aux));
 
-        free(aux);
+//        free(aux);
 
         return next;
     }
@@ -429,6 +434,25 @@ header_field_name(const uint8_t c, struct request_parser *p) {
     next = request_header_field_name;
     return next;
 }
+
+static enum request_state
+header_field_value(const uint8_t c, struct request_parser *p) {
+    enum request_state next;
+    if (c == '\r') {
+        p->i = 0;
+        memset(p->header_field_name, '\0', sizeof(MAX_HEADER_FIELD_NAME_SIZE));
+        return LF_end;
+    }
+    if ((int) p->i == MAX_HEADER_FIELD_NAME_SIZE) {
+        //TODO: too long header field specific error?
+        memset(p->header_field_name, '\0', sizeof(MAX_HEADER_FIELD_NAME_SIZE));
+        next = request_error;
+        p->i = 0;
+        return next;
+    }
+    return request_header_value;
+}
+
 
 static enum request_state
 header_host_OWS_after_value(const uint8_t c, struct request_parser *p) {
@@ -476,15 +500,14 @@ header_host_field_value(const uint8_t c, struct request_parser *p) {
         // If host value was empty, error.
         if (strlen(p->header_field_value) != 0) {
             p->i = 0;
+            //TODO: remember to free p->request->host
+            size_t len = strlen(p->header_field_value);
+            memcpy(p->request->host, &p->header_field_value, len + 1);
+            p->request->host[len] = '\0';
 
-                //TODO: remember to free p->request->host
-                size_t len = strlen(p->header_field_value);
-                memcpy(p->request->host, &p->header_field_value, len + 1);
-                p->request->host[len] = '\0';
+            memset(p->header_field_value, '\0', sizeof(MAX_HEADER_FIELD_NAME_SIZE));
 
-                memset(p->header_field_value, '\0', sizeof(MAX_HEADER_FIELD_NAME_SIZE));
-
-                return request_waiting_for_LF;
+            return request_waiting_for_LF;
 
         } else {
             //TODO: probablemente p->i = 0; deberia estar en varios lugares más (donde retorne a otro estado)
@@ -568,6 +591,26 @@ request_parser_feed(struct request_parser *p, const uint8_t c, buffer *accum) {
         case request_SP_AFTER_TARGET:
             next = single_space(c, p, request_SP_AFTER_TARGET);
             break;
+        case request_header_value:
+            next=header_field_value(c, p);
+            break;
+        case request_connection:
+            write_buffer_string(accum,"close");
+            next=request_consume_string;
+            break;
+        case request_consume_string:
+            if(c == '\r') {
+                next = LF_end;
+            } else {
+                next = request_consume_string;
+            }
+
+            p->value_len++;
+
+            if(p->value_len > MAX_HEADER_FIELD_VALUE_SIZE) {
+                next = request_error;
+            }
+            break;
         case request_no_empty_host:
 
             if(p->host_field_value_complete == 0){
@@ -587,10 +630,10 @@ request_parser_feed(struct request_parser *p, const uint8_t c, buffer *accum) {
 
                 if(!buffer_can_write(accum)){
                     next = request_error;
+                    break;
                 }
 
             }
-
             if(c == '\r') {
                 next = request_waiting_for_LF;
             } else {
@@ -602,7 +645,6 @@ request_parser_feed(struct request_parser *p, const uint8_t c, buffer *accum) {
             if(p->value_len > MAX_HEADER_FIELD_VALUE_SIZE) {
                 next = request_error;
             }
-
             break;
         case request_last_crlf:
             next = CREND(c, p);
@@ -646,7 +688,7 @@ request_consume(buffer *b, struct request_parser *p, bool *errored, buffer *accu
 
         st = request_parser_feed(p, c, accum);
 
-        if(st != request_no_empty_host){
+        if(st != request_no_empty_host && st!= request_consume_string){
          if (buffer_can_write(accum)) {
                 buffer_write(accum, c);
             } else {
@@ -655,16 +697,17 @@ request_consume(buffer *b, struct request_parser *p, bool *errored, buffer *accu
         }
 
         if (request_is_done(st, errored)) {
-            break;
+            goto finally;
         }
     }
 
-    while (buffer_can_read(b)) {
-        const uint8_t c = buffer_read(b);
-        if (buffer_can_write(accum)) {
-            buffer_write(accum, c);
-        }
-    }
+//    while (buffer_can_read(b)) {
+//        const uint8_t c = buffer_read(b);
+//        if (buffer_can_write(accum)) {
+//            buffer_write(accum, c);
+//        }
+//    }
+    finally:
 
     return st;
 }
@@ -674,28 +717,6 @@ request_close(struct request_parser *p) {
     // nada que hacer
 }
 
-extern int
-request_marshall(buffer *b,
-                 const enum response_status status) {
-    size_t n;
-    uint8_t *buff = buffer_write_ptr(b, &n);
-    if (n < 10) {
-        return -1;
-    }
-    buff[0] = 0x05;
-    buff[1] = status;
-    buff[2] = 0x00;
-    buff[3] = socks_req_addrtype_ipv4;
-    buff[4] = 0x00;
-    buff[5] = 0x00;
-    buff[6] = 0x00;
-    buff[7] = 0x00;
-    buff[8] = 0x00;
-    buff[9] = 0x00;
-
-    buffer_write_adv(b, 10);
-    return 10;
-}
 
 // enum response_status
 // cmd_resolve(struct request* request,  struct sockaddr **originaddr,
