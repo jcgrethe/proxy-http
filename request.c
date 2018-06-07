@@ -403,6 +403,9 @@ header_field_name(const uint8_t c, struct request_parser *p) {
 
         } else{
             if (strcmp(aux, "connection")==0 || strcmp(aux, "proxy-connection")==0){
+                memcpy(p->request->host, p->header_field_value,  p->i + 1);
+                p->request->host[p->i] = '\0';
+                p->i=0;
                 next=request_connection;
             }else{
                 next = request_header_value;
@@ -483,7 +486,6 @@ header_host_field_value(const uint8_t c, struct request_parser *p) {
             return request_host_field_value;
         } else {
                 p->i = 0;
-
                 //TODO: remember to free p->request->host
                 size_t len = strlen(p->header_field_value);
                 memcpy(p->request->host, p->header_field_value, len + 1);
@@ -538,7 +540,7 @@ empty_line(const uint8_t c, struct request_parser *p) {
     if (c == '\n') {
 
 //        return request_body;
-        return request_last_crlf;
+        return request_done;
     }
 
     return request_error;
