@@ -487,7 +487,7 @@ request_process(struct selector_key *key, struct request_st *d) {
             d->status = status_command_not_supported;
 
 
-            char *responseString = HTTP_CODE_501;
+            char *responseString = HTTP_CODE_404;
 
             int i;
 
@@ -500,6 +500,27 @@ request_process(struct selector_key *key, struct request_st *d) {
 
 
             }
+
+            buffer_write(d->wb, '\r');
+            buffer_write(d->wb, '\n');
+
+            responseString = "Content-Length: 0";
+
+            for(i = 0 ; responseString[i] != '\0' ; i++){
+
+                if(buffer_can_write(d->wb))
+                    buffer_write(d->wb, (uint8_t) responseString[i]);
+                else
+                    continue;
+
+
+            }
+
+            buffer_write(d->wb, '\r');
+            buffer_write(d->wb, '\n');
+
+            buffer_write(d->wb, '\r');
+            buffer_write(d->wb, '\n');
 
             selector_status s = 0;
             s |= selector_set_interest(key->s, *d->client_fd, OP_WRITE);
