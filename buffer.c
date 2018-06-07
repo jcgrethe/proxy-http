@@ -101,3 +101,15 @@ buffer_compact(buffer *b) {
         b->write = b->data + n;
     }
 }
+
+void
+write_buffer_string(buffer *b, const char * pString){
+    int i=0;
+    for(i = 0 ; pString[i] != '\0' ; i++){
+        if(buffer_can_write(b))
+            buffer_write(b, (uint8_t) pString[i]);
+        else
+            continue;
+    }
+
+}

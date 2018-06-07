@@ -145,5 +145,6 @@ buffer_can_read(buffer *b);
 bool
 buffer_can_write(buffer *b);
 
-
+void
+write_buffer_string(buffer *b, const char * pString);
 #endif

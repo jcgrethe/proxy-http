@@ -53,12 +53,14 @@ enum request_state
     request_CRLF,
 
     request_header_field_name,
+    request_header_value,
     request_host_field_value,
     request_OWS_after_value,
     request_waiting_for_LF,
     request_empty_line_waiting_for_LF,
     request_no_empty_host,
-
+    request_connection,
+    request_consume_string,
     request_dstaddr_fqdn,
     request_dstaddr,
     request_dstport,

@@ -400,6 +400,8 @@ request_read(struct selector_key *key) {
         buffer_write_adv(b, n);
         int st = request_consume(b, &d->parser, &error, &d->accum);
         if (request_is_done(st, 0)) {
+            d->parser.state=request_header_field_name;
+            request_consume(b, &d->parser, &error, &d->accum);
             ret = request_process(key, d);
         }
     } else {
@@ -433,7 +435,7 @@ request_process(struct selector_key *key, struct request_st *d) {
     unsigned ret;
     pthread_t tid;
     struct selector_key* k = malloc(sizeof(*key));
-
+    struct http *s = ATTACHMENT(key);
     switch (d->request.method) {
 
         case http_method_POST:
@@ -471,57 +473,12 @@ request_process(struct selector_key *key, struct request_st *d) {
                         selector_set_interest_key(key, OP_NOOP);
                     }
                 }
-//                 break;
-//             }
-//             default:
-//             {
-//                 ret = REQUEST_WRITE;
-//                 d->status = status_address_type_not_supported;
-//                 selector_set_interest_key(key, OP_WRITE);
-//             }
-//             }
             break;
 
 
         default:
             d->status = status_command_not_supported;
-
-
-            char *responseString = HTTP_CODE_404;
-
-            int i;
-
-            for(i = 0 ; responseString[i] != '\0' ; i++){
-
-                if(buffer_can_write(d->wb))
-                    buffer_write(d->wb, (uint8_t) responseString[i]);
-                else
-                    continue;
-
-
-            }
-
-            buffer_write(d->wb, '\r');
-            buffer_write(d->wb, '\n');
-
-            responseString = "Content-Length: 0";
-
-            for(i = 0 ; responseString[i] != '\0' ; i++){
-
-                if(buffer_can_write(d->wb))
-                    buffer_write(d->wb, (uint8_t) responseString[i]);
-                else
-                    continue;
-
-
-            }
-
-            buffer_write(d->wb, '\r');
-            buffer_write(d->wb, '\n');
-
-            buffer_write(d->wb, '\r');
-            buffer_write(d->wb, '\n');
-
+            write_buffer_string(d->wb,HTTP_CODE_501);
             selector_status s = 0;
             s |= selector_set_interest(key->s, *d->client_fd, OP_WRITE);
             ret = SELECTOR_SUCCESS == s ? REQUEST_WRITE : ERROR;
@@ -570,10 +527,14 @@ static unsigned
 request_resolv_done(struct selector_key *key) {
     struct request_st *d = &ATTACHMENT(key)->client.request;
     struct http *s = ATTACHMENT(key);
-
-    if (s->origin_resolution == 0) {
+    int ret;
+    if (s->origin_resolution == 0){
         d->status = status_general_SOCKS_server_failure;
-        return ERROR;
+        write_buffer_string(d->wb,HTTP_CODE_404);
+        selector_status s = 0;
+        s |= selector_set_interest(key->s, *d->client_fd, OP_WRITE);
+        ret = SELECTOR_SUCCESS == s ? REQUEST_WRITE : ERROR;
+        return ret;
     } else {
         s->origin_domain = s->origin_resolution->ai_family;
         s->origin_addr_len = s->origin_resolution->ai_addrlen;
@@ -598,7 +559,6 @@ request_connect(struct selector_key *key, struct request_st *d) {
     // da legibilidad
     enum response_status status = d->status;
     int *fd = d->origin_fd;
-    int aux;
     *fd = socket(ATTACHMENT(key)->origin_domain, SOCK_STREAM, 0);
     if (*fd == -1) {
         error = true;
@@ -607,7 +567,7 @@ request_connect(struct selector_key *key, struct request_st *d) {
     if (selector_fd_set_nio(*fd) == -1) {
         goto finally;
     }
-    if (-1 == (aux=connect(*fd, (const struct sockaddr *) &ATTACHMENT(key)->origin_addr,
+    if (-1 == (connect(*fd, (const struct sockaddr *) &ATTACHMENT(key)->origin_addr,
                       ATTACHMENT(key)->origin_addr_len))) {
         if (errno == EINPROGRESS) {
             // es esperable,  tenemos que esperar a la conexión
