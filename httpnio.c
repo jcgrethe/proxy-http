@@ -403,6 +403,12 @@ request_read(struct selector_key *key) {
             d->parser.state=request_header_field_name;
             request_consume(b, &d->parser, &error, &d->accum);
             ret = request_process(key, d);
+                while (buffer_can_read(b)) {
+                    const uint8_t c = buffer_read(b);
+                    if (buffer_can_write(&d->accum)) {
+                        buffer_write(&d->accum, c);
+                    }
+                }
         }
     } else {
         ret = ERROR;
