@@ -47,6 +47,8 @@ void parse_options(int argc,const char **argv) {
                 break;
             case 'M':
                 /* Media types transformables */
+                parameters->media_types_input = optarg;
+                parameters->mts = parse_media_types(parameters->media_types_input);
                 break;
             case 'o':
                 /* Management SCTP port */
@@ -100,7 +102,7 @@ void print_help(){
     printf(SCOLOR SPREFIX "\t-o "STCOLOR" puerto_de_management" SSUFIX RESETCOLOR"\n");
     printf(SCOLOR SPREFIX"\tpuerto SCTP donde servirá el servicio de management" SSUFIX RESETCOLOR"\n");
     printf(SCOLOR SPREFIX "\t-p "STCOLOR" puerto_local" SSUFIX RESETCOLOR"\n");
-    printf(SCOLOR SPREFIX"\tpuerto TCP donde escuchará conexiones entrantes POP3" SSUFIX RESETCOLOR"\n");
+    printf(SCOLOR SPREFIX"\tpuerto TCP donde escuchará conexiones entrantes" SSUFIX RESETCOLOR"\n");
     printf(SCOLOR SPREFIX "\t-t "STCOLOR" cmd" SSUFIX RESETCOLOR"\n");
     printf(SCOLOR SPREFIX"\tcomando utilizado para las transofmraciones externas" SSUFIX RESETCOLOR"\n");
     printf(SCOLOR SPREFIX "\t-v" SSUFIX RESETCOLOR"\n");

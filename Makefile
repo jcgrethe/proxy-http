@@ -25,11 +25,12 @@ PARSER=parser.c
 PARSER_UTILS=parser_utils.c
 SCTP_HANDLERS=sctp/sctp_integration.c -lsctp
 PARAMETERS=parameters.c
+MEDIA_TYPES=media_types.c
 
 all: $(PROXY_OUT)
 
 $(PROXY_OUT):
-	$(CC) -pthread $(MAIN) $(BUFFER) $(NETUTILS) $(PARSER) $(PARSER_UTILS) $(REQUEST) $(SELECTOR) $(HTTP) $(HTTP_NIO) $(STM) $(SCTP_HANDLERS) $(PARAMETERS) -o $(PROXY_OUT)
+	$(CC) -pthread $(MAIN) $(BUFFER) $(NETUTILS) $(PARSER) $(PARSER_UTILS) $(REQUEST) $(SELECTOR) $(HTTP) $(HTTP_NIO) $(STM) $(SCTP_HANDLERS) $(PARAMETERS) $(MEDIA_TYPES) -o $(PROXY_OUT)
 	$(CC) -pthread sctp/sctpclnt.c sctp/handlers.c -L/usr/local/lib -lsctp -o sctpclnt
 
 

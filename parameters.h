@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <netinet/in.h>
 #include <stdbool.h>
-
+#include "media_types.h"
 #define SCTP_DEFAULT_PORT 9090
 #define HTTP_DEFAULT_PORT 8080
 #define MAX_PORT 60000
@@ -27,6 +27,9 @@ struct options_struct {
     /* Response settings */
     int transformations;
     char * filter_command;
+    char * media_types_input;
+
+    struct media_types * mts;
 };
 
 typedef struct options_struct * options;
