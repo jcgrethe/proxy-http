@@ -410,9 +410,10 @@ request_read(struct selector_key *key) {
                         buffer_write(&d->accum, c);
                     }
                 }
-            } else {
-                ret = ERROR;
+            } else if (st=request_error_unsupported_method){
+                return request_process(key, d);
             }
+
         }
     } else {
         ret = ERROR;

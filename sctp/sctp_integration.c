@@ -169,9 +169,9 @@ void sctp_write(struct selector_key *key){
 	struct sctp_data *data = ATTACHMENT(key);
 	int length = HEADERS + strlen(data->datagram.message), ret;
 
-	printf("Datagram: [%u %u %u %u] [%llu] [%u %u %u]\n", data->datagram.type, 
-        data->datagram.command, data->datagram.argsq, data->datagram.code, data->datagram.message,
-        data->datagram.message[START_CURR], data->datagram.message[START_HIS], data->datagram.message[START_SUC]);
+//	printf("Datagram: [%u %u %u %u] [%llu] [%u %u %u]\n", data->datagram.type,
+//        data->datagram.command, data->datagram.argsq, data->datagram.code, data->datagram.message,
+//        data->datagram.message[START_CURR], data->datagram.message[START_HIS], data->datagram.message[START_SUC]);
 
 	uint8_t * buffer = calloc(MAX_MSG, sizeof(uint8_t));
 	buffer[TYPE] = data->datagram.type;

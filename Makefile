@@ -1,4 +1,4 @@
-CFLAGS=-pedantic -std=c99 -Wall -Wextra -Wfloat-equal -Wshadow -Wpointer-arith -Wstrict-prototypes -Wcast-align -Wstrict-overflow=5 -Waggregate-return -Wcast-qual -Wswitch-default -Wswitch-enum -Wunreachable-code -Wno-unused-parameter -Wno-unused-function -Wno-unused-variable -Werror -pedantic-errors -Wmissing-prototypes -D_BSD_SOURCE
+CFLAGS = -pedantic -std=c99 -Wall -Wextra -Wfloat-equal -Wshadow -Wpointer-arith -Wstrict-prototypes -Wcast-align -Wstrict-overflow=5 -Waggregate-return -Wcast-qual -Wswitch-default -Wswitch-enum -Wunreachable-code -Wno-unused-parameter -Wno-unused-function -Wno-unused-variable -Werror -pedantic-errors -Wmissing-prototypes -D_BSD_SOURCE
 
 UNAME := $(shell uname)
 
@@ -25,13 +25,21 @@ PARSER=parser.c
 PARSER_UTILS=parser_utils.c
 SCTP_HANDLERS=sctp/sctp_integration.c -lsctp
 PARAMETERS=parameters.c
+MEDIA_TYPES=media_types.c
+
+FSANITIZE=
+
+FLAGS =
 
 all: $(PROXY_OUT)
 
 $(PROXY_OUT):
-	$(CC) -pthread $(MAIN) $(BUFFER) $(NETUTILS) $(PARSER) $(PARSER_UTILS) $(REQUEST) $(SELECTOR) $(HTTP) $(HTTP_NIO) $(STM) $(SCTP_HANDLERS) $(PARAMETERS) -o $(PROXY_OUT)
-	$(CC) -pthread sctp/sctpclnt.c sctp/handlers.c -L/usr/local/lib -lsctp -o sctpclnt
-
+	@echo "[Compiling...]"
+	@$(CC) -pthread  $(FSANITIZE) $(FLAGS) $(MAIN) $(BUFFER) $(NETUTILS) $(PARSER) $(PARSER_UTILS) $(REQUEST) $(SELECTOR) $(HTTP) $(HTTP_NIO) $(STM) $(SCTP_HANDLERS) $(PARAMETERS) $(MEDIA_TYPES) -o $(PROXY_OUT)
+	@$(CC) -pthread sctp/sctpclnt.c sctp/handlers.c -L/usr/local/lib -lsctp -o sctpclnt
+	@echo "[Finished]"
 
 clean:
-	rm httpd sctpclnt
+	@echo "[Removing...]"
+	@rm httpd sctpclnt
+	@echo "[Finished]"
