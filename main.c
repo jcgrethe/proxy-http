@@ -16,6 +16,8 @@
 #include <limits.h>
 #include <errno.h>
 #include <signal.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 #include <unistd.h>
 #include <sys/types.h>   // socket
@@ -46,7 +48,10 @@ sigterm_handler(const int signal) {
 
 int
 main(const int argc, const char **argv) {
+    /* Parsing options - setting up proxy */
     parse_options(argc, argv);
+    /* Setting file error */
+    FILE * fe = freopen(parameters->error_file, "a", stderr);
 
     // no tenemos nada que leer de stdin
     close(0);
@@ -198,5 +203,6 @@ finally:
     if(server >= 0) {
         close(server);
     }
+//    fclose(fe);
     return ret;
 }

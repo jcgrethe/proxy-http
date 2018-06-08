@@ -10,10 +10,10 @@
 #define MAX_PORT 60000
 #define MIN_PORT 1024
 #define VERSION "0.0.0"
-#define ERROR_FILE_DEFAULT "/var/log/pc-2018-01"
+#define ERROR_FILE_DEFAULT "/dev/null"
 #define LOCALHOST "127.0.0.1"
 #define LISTENING_ADDRESS "0.0.0.0"
-#define DEFAULT_MEDIA_TYPES_RANGES "*/*"
+#define DEFAULT_MEDIA_TYPES_RANGES ""
 
 struct options_struct {
     /* Connection Settings */
