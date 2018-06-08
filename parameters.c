@@ -1,12 +1,18 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <ctype.h>
+#include <arpa/inet.h>
+#include <memory.h>
+#include <netdb.h>
+#include <netinet/in.h>
 #include "./parameters.h"
 #include "styles.h"
 #include <string.h>
 void print_help();
 void print_version();
 uint16_t validate_port(char * port);
+void resolve_address(char * address, uint16_t port, struct addrinfo ** addrinfo);
 
 // Global variable with the parameters
 options parameters;
@@ -81,6 +87,8 @@ void parse_options(int argc,const char **argv) {
                 exit(0);
         }
     }
+    resolve_address(parameters->listen_address, parameters->http_port, &parameters->listenadddrinfo);
+    resolve_address(parameters->management_address, parameters->sctp_port, &parameters->managementaddrinfo);
 }
 
 void print_help(){
@@ -116,4 +124,23 @@ void print_version(){
 uint16_t validate_port(char * port){
     char ** rubbish;
     return (strtol(port, rubbish, 10) > MIN_PORT && strtol(port, rubbish, 10) < MAX_PORT)?strtol(port, rubbish, 10):0;
+}
+
+void resolve_address(char * address, uint16_t port, struct addrinfo ** addrinfo) {
+    struct addrinfo hints = {
+            .ai_family    = AF_UNSPEC,    /* Allow IPv4 or IPv6 */
+            .ai_socktype  = SOCK_STREAM,  /* Datagram socket */
+            .ai_flags     = AI_PASSIVE,   /* For wildcard IP address */
+            .ai_protocol  = 0,            /* Any protocol */
+            .ai_canonname = NULL,
+            .ai_addr      = NULL,
+            .ai_next      = NULL,
+    };
+    char buff[7];
+    snprintf(buff, sizeof(buff), "%hu", port);
+    if (0 != getaddrinfo(address, buff, &hints, addrinfo)){
+        printf("Cannot resolve %s, please try again with a valid address.\n", address);
+        fprintf(stderr,"Domain name resolution error\n");
+        exit(0);
+    }
 }

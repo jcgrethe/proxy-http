@@ -19,9 +19,11 @@ struct options_struct {
     /* Connection Settings */
     uint16_t http_port;
     char * listen_address;
+    struct addrinfo * listenadddrinfo;
+
     uint16_t sctp_port;
     char * management_address;
-
+    struct addrinfo * managementaddrinfo;
     /* Logs */
     char * error_file;
 

@@ -46,45 +46,6 @@ sigterm_handler(const int signal) {
 
 int
 main(const int argc, const char **argv) {
-    unsigned proxy_port;
-    unsigned sctp_port;
-    char ** rubbish;
-
-
-
-//    if(argc == 3){    //One custom port
-//        if(strcmp(argv[1], SCTP_OPTION_SYMBOL) == 0 && validate_port(argv[2])){
-//            sctp_port = strtol(argv[2], rubbish, 10);
-//            proxy_port = PROXY_DEFAULT_PORT;
-//        }else if(strcmp(argv[1], PROXY_OPTION_SYMBOL) == 0 && validate_port(argv[2])){
-//            proxy_port = strtol(argv[2], rubbish, 10);
-//            sctp_port = SCTP_DEFAULT_PORT;
-//        } else{
-//            printf("Invalid arguments for one custom port. Using default values. \n");
-//            proxy_port = PROXY_DEFAULT_PORT;
-//            sctp_port = SCTP_DEFAULT_PORT;
-//        }
-//    } else if(argc == 5){   //Two custom ports
-//        if(strcmp(argv[1], SCTP_OPTION_SYMBOL) == 0 && strcmp(argv[3], PROXY_OPTION_SYMBOL) == 0 && validate_port(argv[2]) && validate_port(argv[4])){
-//            sctp_port = strtol(argv[2], rubbish, 10);
-//            proxy_port = strtol(argv[4], rubbish, 10);
-//        }else if(strcmp(argv[3], SCTP_OPTION_SYMBOL) == 0 && strcmp(argv[1], PROXY_OPTION_SYMBOL) == 0 && validate_port(argv[2]) && validate_port(argv[4])){
-//            sctp_port = strtol(argv[4], rubbish, 10);
-//            proxy_port = strtol(argv[2], rubbish, 10);
-//        }else{
-//            printf("Invalid arguments for two custom ports. Using default values.\n");
-//            proxy_port = PROXY_DEFAULT_PORT;
-//            sctp_port = SCTP_DEFAULT_PORT;
-//        }
-//    } else{
-//        if(argc == 1)
-//            printf("No arguments, using default values.\n");
-//        else
-//            printf("Invalid arguments, using default values.\n");
-//        proxy_port = PROXY_DEFAULT_PORT;
-//        sctp_port = SCTP_DEFAULT_PORT;
-//    }
-
     parse_options(argc, argv);
 
     // no tenemos nada que leer de stdin
@@ -118,34 +79,35 @@ main(const int argc, const char **argv) {
         err_msg = "unable to create sctp socket";
         goto finally;
     }
-    fprintf(stdout, "Listening on TCP port %d for http and %d for sctp.\n", parameters->http_port, parameters->sctp_port);
 
     // man 7 ip. no importa reportar nada si falla.
     setsockopt(server, SOL_SOCKET, SO_REUSEADDR, &(int){ 1 }, sizeof(int));
 
     // Main proxy socket listening
-    if(bind(server, (struct sockaddr*) &addr, sizeof(addr)) < 0) {
-        err_msg = "unable to bind socket";
+    if(bind(server, parameters->listenadddrinfo->ai_addr, sizeof(addr)) < 0) {
+        err_msg = "Unable to bind socket";
         goto finally;
     }
 
     if (listen(server, 20) < 0) {
-        err_msg = "unable to listen";
+        err_msg = "Unable to listen";
         goto finally;
     }
 
 
     //SCTP Socket listening
-    if(bind(sctp_socket, (struct sockaddr*) &addr_sctp, sizeof(addr_sctp)) < 0) {
-        err_msg = "unable to bind socket for sctp";
+    if(bind(sctp_socket, parameters->managementaddrinfo->ai_addr, sizeof(addr_sctp)) < 0) {
+        err_msg = "Unable to bind socket for sctp";
         goto finally;
     }
 
     if (listen(sctp_socket, 20) < 0) {
-        err_msg = "unable to listen sctp socket";
+        err_msg = "Unable to listen sctp socket";
         goto finally;
     }
     // check with: sudo nmap -sY localhost -PY -p 1081
+
+    fprintf(stdout, "Listening on TCP at %s:%d and on SCTP at %s:%d\n", parameters->listen_address, parameters->http_port,parameters->management_address, parameters->sctp_port);
 
     /* Here we initialize struct to take some metrics. */
     metrstr = calloc(INSTANCES, sizeof(struct metric));
