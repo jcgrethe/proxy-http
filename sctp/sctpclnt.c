@@ -38,6 +38,8 @@ union ans{
 };
 
 typedef union ans * answer;
+int validIpAddress(char * ipAddress);
+void clean(uint8_t * buf);
 
 int main(int argc, char * argv[]) {
   int connSock, in, i, ret, flags;
@@ -140,9 +142,12 @@ int main(int argc, char * argv[]) {
   if (strcmp(first, "login") == 0) {
     if (handleLogin(second, third, connSock)) {
       while (1) {
-        first[0] = NULL;
-        second[0] = NULL;
-        third[0] = NULL;
+        first[0] = 0;
+        second[0] = 0;
+        third[0] = 0;
+//        first[0] = NULL;
+//        second[0] = NULL;
+//        third[0] = NULL;
         if (fgets(buffer, sizeof(buffer), stdin) == NULL) {
           printf(ECOLOR EPREFIX " No characters read " ESUFIX RESETCOLOR"\n");
           break;
@@ -217,7 +222,7 @@ int main(int argc, char * argv[]) {
   } else {
     printf(ECOLOR EPREFIX " Please login property. " ESUFIX RESETCOLOR"\n");
   }
-}
+  }
     close(connSock);
     return 0;
 }
@@ -225,18 +230,6 @@ int main(int argc, char * argv[]) {
 void clean(uint8_t * buf){
   for(int i = 0; i < MAX_BUFFER; i++){
     buf[i] = 0;
-  }
-  return;
-}
-
-void to_buffer(uint8_t * buf, uint8_t cpy[], int len, int * position){
-  if(len > 0){  
-    int i = 0;
-    int j = (int) &position;
-    for(i; i < len; i++){
-      buf[j + i] = cpy[i];
-    }
-    position = j + i;
   }
   return;
 }

@@ -13,6 +13,7 @@
 #define ERROR_FILE_DEFAULT "/var/log/pc-2018-01"
 #define LOCALHOST "127.0.0.1"
 #define LISTENING_ADDRESS "0.0.0.0"
+#define DEFAULT_MEDIA_TYPES_RANGES "*/*"
 
 struct options_struct {
     /* Connection Settings */

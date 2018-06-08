@@ -27,20 +27,20 @@ int handleLogin(uint8_t * second, uint8_t * third, int connSock){
   int datagramSize = 4 + secondLenght + 1 + thirdLenght;
   struct sctp_status status;
   
-  if(second == NULL || third == NULL){
+  if(!second[0] || !third[0]){
     printf(ECOLOR EPREFIX " Invalid parameters. " ESUFIX RESETCOLOR"\n");
-    return -1;
+    return 0;
   } 
 
   datagram[0] = type;
   datagram[1] = command;
   datagram[2] = argsq;
   datagram[3] = code;
-  datagram[4] = second;
   memcpy(&datagram[4], second, secondLenght);
   datagram[4 + secondLenght] = ' ';
   memcpy(&datagram[4 + secondLenght + 1], third, thirdLenght);
-  datagram[4 + secondLenght + thirdLenght + 1] = "\0"; 
+  memcpy(&datagram[4 + secondLenght + thirdLenght+ 1], "\0", 1);
+//  datagram[4 + secondLenght + thirdLenght + 1] = "\0";
   // Send login request
 
   printf(ICOLOR IPREFIX " ...Sending login... ");
@@ -72,11 +72,11 @@ int handleMetric(char * second, char * third, int connSock){
   char type = 1, command, argsq, code = 0, ret;
   uint8_t datagram[MAX_DATAGRAM];
   
-  if (*third != NULL){
+  if (third[0]){
     printf(ECOLOR EPREFIX " Invalid parameters. " ESUFIX RESETCOLOR"\n");
     return 0;
   }
-  if (*second == NULL){
+  if (!second[0]){
     argsq = 0;
   }else{
     argsq = 1;
@@ -111,7 +111,7 @@ int handleConfig(char * second, char * third, int connSock){
   char type = 2, command = 0, argsq = 0, code = 0, ret, lenght = 4;
   uint8_t datagram[MAX_DATAGRAM];
   
-  if(*second == NULL && *third == NULL){
+  if(!second[0] && !third[0]){
     argsq = 0;
   }else{
     argsq = 1;
@@ -125,7 +125,7 @@ int handleConfig(char * second, char * third, int connSock){
       printf(ECOLOR EPREFIX " Invalid config. " ESUFIX RESETCOLOR"\n");
       return 0;
     }    
-    if (*third != NULL){
+    if (third[0]){
       argsq = 2;
       memcpy(&datagram[4], third, strlen(third));
       lenght = lenght + strlen(third);
@@ -178,7 +178,7 @@ int handleExit(char * second, char * third, int connSock){
   char type = 3, command = 2, argsq = 0, code = 0, ret;
   uint8_t datagram[MAX_DATAGRAM];
  
-  if(*second != NULL){
+  if(second[0]){
     printf(ECOLOR EPREFIX " Parameters not allowed. " ESUFIX RESETCOLOR"\n");
     return 0;
   }  

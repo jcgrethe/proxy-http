@@ -24,10 +24,11 @@ void parse_options(int argc,const char **argv) {
     parameters->listen_address = LISTENING_ADDRESS;
     parameters->transformations = 0;    //Desactivated by default
     parameters->filter_command = NULL;
-
+    parameters->media_types_input = DEFAULT_MEDIA_TYPES_RANGES;
+    parameters->mts = parse_media_types(parameters->media_types_input);
     int c;
     /* e: option e requires argument e:: optional argument */
-    while ((c = getopt (argc, argv, "e:hl:L:m:M:o:p:P:t:v")) != -1){
+    while ((c = getopt (argc,(char*const*) argv, "e:hl:L:m:M:o:p:P:t:v")) != -1){
         switch (c) {
             case 'e':
                 /* Error file */
@@ -90,7 +91,7 @@ void print_help(){
            "ejecuciones de los filtros" SSUFIX RESETCOLOR"\n");
     printf(SCOLOR SPREFIX "\t-h" SSUFIX RESETCOLOR"\n");
     printf(SCOLOR SPREFIX"\timprime la ayuda y termina" SSUFIX RESETCOLOR"\n");
-    printf(SCOLOR SPREFIX "\t-l "STCOLOR"direccion_pop3" SSUFIX RESETCOLOR"\n");
+    printf(SCOLOR SPREFIX "\t-l "STCOLOR"direccion" SSUFIX RESETCOLOR"\n");
     printf(SCOLOR SPREFIX"\testablece la dirección donde servirá el proxy" SSUFIX RESETCOLOR"\n");
     printf(SCOLOR SPREFIX "\t-L "STCOLOR"direccion_management" SSUFIX RESETCOLOR"\n");
     printf(SCOLOR SPREFIX"\testablece la dirección donde servirá el servicio de management" SSUFIX RESETCOLOR"\n");
