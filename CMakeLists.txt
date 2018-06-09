@@ -32,6 +32,8 @@ add_executable(v2
         http_codes.h
         parameters.c
         parameters.h
+        media_types.c
+        media_types.h
         )
 target_link_libraries(v2 -L/usr/local/lib)
 target_link_libraries(v2 -lsctp)
