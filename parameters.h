@@ -29,7 +29,7 @@ struct options_struct {
 
     /* Response settings */
     int transformations;
-    char * filter_command;
+    char * command;
     char * media_types_input;
 
     struct media_types * mts;

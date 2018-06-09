@@ -29,7 +29,7 @@ void parse_options(int argc,const char **argv) {
     parameters->management_address = LOCALHOST;
     parameters->listen_address = LISTENING_ADDRESS;
     parameters->transformations = 0;    //Desactivated by default
-    parameters->filter_command = NULL;
+    parameters->command = NULL;
     parameters->media_types_input = DEFAULT_MEDIA_TYPES_RANGES;
     parameters->mts = parse_media_types(parameters->media_types_input);
     int c;
@@ -74,7 +74,7 @@ void parse_options(int argc,const char **argv) {
                 if (cmd == NULL)
                     exit(0);
                 strcpy(cmd, optarg);
-                parameters->filter_command = cmd;
+                parameters->command = cmd;
                 parameters->transformations   = 1;
             }
                 break;

@@ -442,7 +442,7 @@ header_field_value(const uint8_t c, struct request_parser *p) {
     enum request_state next;
     if (c == '\r') {
         p->i = 0;
-        memset(p->header_field_name, '\0', sizeof(MAX_HEADER_FIELD_NAME_SIZE));
+        memset(p->header_field_name, '\0', sizeof(MAX_HEADER_FIELD_NAME_SIZE)); //TODO: porque es _field_name aca?
         return LF_end;
     }
     if ((int) p->i == MAX_HEADER_FIELD_NAME_SIZE) {
@@ -768,25 +768,25 @@ request_close(struct request_parser *p) {
 //     return ret;
 // }
 
-enum response_status
-errno_to_socks(const int e) {
-    enum response_status ret = status_general_SOCKS_server_failure;
-    switch (e) {
-        case 0:
-            ret = status_succeeded;
-            break;
-        case ECONNREFUSED:
-            ret = status_connection_refused;
-            break;
-        case EHOSTUNREACH:
-            ret = status_host_unreachable;
-            break;
-        case ENETUNREACH:
-            ret = status_network_unreachable;
-            break;
-        case ETIMEDOUT:
-            ret = status_ttl_expired;
-            break;
-    }
-    return ret;
-}
+//enum response_status
+//errno_to_socks(const int e) {
+//    enum response_status ret = status_general_SOCKS_server_failure;
+//    switch (e) {
+//        case 0:
+//            ret = status_succeeded;
+//            break;
+//        case ECONNREFUSED:
+//            ret = status_connection_refused;
+//            break;
+//        case EHOSTUNREACH:
+//            ret = status_host_unreachable;
+//            break;
+//        case ENETUNREACH:
+//            ret = status_network_unreachable;
+//            break;
+//        case ETIMEDOUT:
+//            ret = status_ttl_expired;
+//            break;
+//    }
+//    return ret;
+//}

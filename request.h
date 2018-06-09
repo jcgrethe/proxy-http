@@ -7,20 +7,19 @@
 
 #include "buffer.h"
 #include "parser_utils.h"
+//#include "response.h"
 
 #define MAX_REQUEST_TARGET_SIZE 8000
 #define MAX_HEADER_FIELD_NAME_SIZE 256
 #define MAX_HEADER_FIELD_VALUE_SIZE 8000 //TODO
 
-enum http_method
-{
+typedef enum http_method {
     http_method_GET,
     http_method_POST,
     http_method_HEAD
-};
+} http_method;
 
-enum socks_addr_type
-{
+enum socks_addr_type {
     socks_req_addrtype_ipv4 = 0x01,
     socks_req_addrtype_domain = 0x03,
     socks_req_addrtype_ipv6 = 0x04,
@@ -32,18 +31,16 @@ union socks_addr {
     struct sockaddr_in6 ipv6;
 };
 
-struct request
-{
-    enum http_method method;
-    union socks_addr      dest_addr;
+struct request {
+    http_method method;
+    union socks_addr dest_addr;
     char *host;
     in_port_t port;
-
-    /** port in network byte order */
+    int content_length;
+    struct response *response;
 };
 
-enum request_state
-{
+enum request_state {
 
     request_method,
     request_target,
@@ -67,10 +64,10 @@ enum request_state
     request_last_crlf,
     LF_end,
     // apartir de aca están done
-    request_done,
+            request_done,
 
     // y apartir de aca son considerado con error
-    request_error,
+            request_error,
     request_error_unsupported_method,
     request_error_unsupported_http_version,
     request_error_unsupported_version,
@@ -79,8 +76,7 @@ enum request_state
 
 };
 
-struct request_parser
-{
+struct request_parser {
     struct request *request;
     enum request_state state;
 
@@ -99,18 +95,17 @@ struct request_parser
     int value_len;
 };
 
-enum response_status
-{
-    status_succeeded,
-    status_general_SOCKS_server_failure,
-    status_connection_not_allowed_by_ruleset,
-    status_network_unreachable,
-    status_host_unreachable,
-    status_connection_refused,
-    status_ttl_expired,
-    status_command_not_supported,
-    status_address_type_not_supported,
-};
+//enum response_status {
+//    status_succeeded,
+//    status_general_SOCKS_server_failure,
+//    status_connection_not_allowed_by_ruleset,
+//    status_network_unreachable,
+//    status_host_unreachable,
+//    status_connection_refused,
+//    status_ttl_expired,
+//    status_command_not_supported,
+//    status_address_type_not_supported,
+//};
 
 /** inicializa el parser */
 void request_parser_init(struct request_parser *p);
@@ -127,10 +122,10 @@ request_parser_feed(struct request_parser *p, const uint8_t c, buffer *accum);
  *   si el parsing se debió a una condición de error
  */
 enum request_state
-request_consume(buffer *b, struct request_parser *p, bool *errored, buffer *pBuffer );
+request_consume(buffer *b, struct request_parser *p, bool *errored, buffer *pBuffer);
 
 /**
- * Permite distinguir a quien usa socks_hello_parser_feed si debe seguir
+ * Permite distinguir a quien usa request_parser_feed si debe seguir
  * enviando caracters o no. 
  *
  * En caso de haber terminado permite tambien saber si se debe a un error
@@ -139,26 +134,23 @@ bool request_is_done(const enum request_state st, bool *errored);
 
 void request_close(struct request_parser *p);
 
-/**
- * serializa en buff la una respuesta al request.
- *
- * Retorna la cantidad de bytes ocupados del buffer o -1 si no había
- * espacio suficiente.
- */
-extern int
-request_marshall(buffer *b,
-                 const enum response_status status);
+char *strtolower(char *s, int size);
 
-/** convierte a errno en response_status */
-enum response_status
-errno_to_socks(int e);
+///**
+// * serializa en buff la una respuesta al request.
+// *
+// * Retorna la cantidad de bytes ocupados del buffer o -1 si no había
+// * espacio suficiente.
+// */
+//extern int
+//request_marshall(buffer *b,
+//                 const enum response_status status);
 
-#include <netdb.h>
-#include <arpa/inet.h>
-
-/** se encarga de la resolcuión de un request */
-enum response_status
-cmd_resolve(struct request *request, struct sockaddr **originaddr,
-            socklen_t *originlen, int *domain);
+///** convierte a errno en response_status */
+//enum response_status
+//errno_to_socks(int e);
+//
+//#include <netdb.h>
+//#include <arpa/inet.h>
 
 #endif

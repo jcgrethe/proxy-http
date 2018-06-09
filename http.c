@@ -17,6 +17,7 @@
 
 #include "http.h"
 #include "request.h"
+#include "response.h"
 #include "netutils.h"
 
 #define N(x) (sizeof(x)/sizeof((x)[0]))
