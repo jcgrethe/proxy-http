@@ -12,7 +12,7 @@
 #include "request.h"
 
 //////////////////////////////////////////////////////////////////////////////
-
+struct parser_definition d; //For recieving byte to byte.
 
 static enum request_state
 LF(const uint8_t c, struct request_parser *p) {
@@ -34,7 +34,6 @@ method(const uint8_t c, struct request_parser *p) {
     // If the parser has NULL for method sub_parser, then instantiate it
     // else, use it and control return of feeding a byte.
     if (p->http_sub_parser == NULL) {
-        struct parser_definition d;
 
         switch (c) {
             case 'G':
@@ -236,7 +235,7 @@ HTTP_version(const uint8_t c, struct request_parser *p) {
 
     // The parser should be NULL after method sub parser destruction.
     if (p->http_sub_parser == NULL) {
-        struct parser_definition d = parser_utils_strcmpi("HTTP/1.1");
+        d = parser_utils_strcmpi("HTTP/1.1");
         p->http_sub_parser = parser_init(parser_no_classes(), &d);
     }
 
