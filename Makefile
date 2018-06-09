@@ -41,5 +41,5 @@ $(PROXY_OUT):
 
 clean:
 	@echo "[Removing...]"
-	@rm httpd sctpclnt
+	@rm -f httpd sctpclnt
 	@echo "[Finished]"
