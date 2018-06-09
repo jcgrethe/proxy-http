@@ -43,7 +43,13 @@ curl -x localhost:8080  -i -X DELETE http://localhost:9090/api/other
 echo "---- 017 PUT basico (No requerido) ----"
 curl -x localhost:8080  --data-binary 'hola' -X PUT http://localhost:9090/api/other -i
 echo "---- 018 PUT 3G (No requerido) ----"
-time curl -x localhost:8080  -s --data-binary @f3g -X PUT http://localhost:9090/api/other |sha256sum
+curl -x localhost:8080  -s --data-binary @f3g -X PUT http://localhost:9090/api/other
 
 
+
+echo "======    Extras    ======"
+echo "---- POST carcteres chinos ----"
+curl -x localhost:8080  --data-binary '卡拉科特' -X POST http://localhost:9090/api/other -i
+echo "---- Metodo SEARCH (Aplica para demas metodos) ----"
+curl -x localhost:8080  --data-binary 'a' -X SEARCH http://localhost:9090/api/other
 echo "======    FIN    ======"

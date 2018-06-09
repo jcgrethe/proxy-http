@@ -46,7 +46,7 @@ struct media_types * parse_media_types(char * arg){
 }
 
 
-void createRegex(const char * type, const char * subtype, char * regex){
+void createRegex(const char * type, const char * subtype, const char * ows, const char * ows_parameter, char * regex){
     if(strcmp(type, "*") == 0)
         strcpy(regex,"[a-zA-Z]+\\/[a-zA-Z]+");
     else if(strcmp(subtype, "*") == 0){
@@ -58,6 +58,12 @@ void createRegex(const char * type, const char * subtype, char * regex){
         strcat(regex, "\\/");
         strcat(regex, subtype);
     }
+    if(ows != NULL && ows_parameter != NULL){
+        strcat(regex, ";");
+        strcat(regex, ows);
+        strcat(regex, "=");
+        strcat(regex, ows_parameter);
+    }
 }
 int validateRanges(char ** ranges){
     // TODO: Validate ranges
@@ -65,15 +71,17 @@ int validateRanges(char ** ranges){
 }
 
 regex_t * createRegexCompilersArray(char ** ranges, const int rangesi){
-    char * type , * subtype;
+    char * type , * subtype, * ows, * ows_parameter;
     char * regex = malloc(REGEXMAXLENGTH * sizeof(char));
-    const char * delim = "/";
+    const char * delim = "/",  * ows_delim = ";", * ows_parameter_delim = "=" ;
     regex_t * compiledExp = malloc((rangesi)* sizeof(regex_t));
     int compileFlags;
     for (int i = 0; i < rangesi ; i++) {
         type = strtok(ranges[i], delim);
-        subtype = strtok(NULL, delim);
-        createRegex(type, subtype, regex);
+        subtype = strtok(NULL, ows_delim);
+        ows = strtok(NULL, ows_parameter_delim);
+        ows_parameter = strtok(NULL, ows_parameter_delim);
+        createRegex(type, subtype, ows, ows_parameter, regex);
         compileFlags = regcomp(&compiledExp[i], regex, REG_EXTENDED);
         if(compileFlags != 0)
             printf("Error creating regex comp.");
