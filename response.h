@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <netinet/in.h>
+#include <sys/types.h>
 
 #include "buffer.h"
 #include "parser_utils.h"
@@ -22,7 +23,7 @@ struct response
 
     bool content_length_present;
 
-    int content_length;
+    ssize_t content_length;
 };
 
 enum response_state
@@ -41,6 +42,7 @@ enum response_state
     response_header_value,
     response_CR_after_header_value,
     response_LF_after_header_value,
+    response_LF_after_header_value_content_length,
 
     response_empty_line_waiting_for_LF,
 
@@ -114,7 +116,7 @@ response_parser_feed(struct response_parser *p, const uint8_t c, buffer *wb);
  *   si el parsing se debió a una condición de error
  */
 enum response_state
-response_consume(buffer *b, struct response_parser *p, bool *errored, buffer *wb );
+response_consume(buffer *b, struct response_parser *p, bool *errored, buffer *wb, ssize_t * bytesRead);
 
 /**
  * Permite distinguir a quien usa response_parser_feed si debe seguir

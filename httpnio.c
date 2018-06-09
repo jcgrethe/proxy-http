@@ -195,6 +195,8 @@ struct response_st {
 
     struct request *request;
     struct response_parser response_parser;
+
+    bool response_parser_initialized;
 };
 
 /** usado por TRANSFORMATION */
@@ -267,6 +269,7 @@ struct http {
         struct connecting conn;
         struct copy copy;
         struct response_st response;
+        enum response_state aux_response_state;
     } orig;
 
     /** buffers para ser usados read_buffer, write_buffer.*/
@@ -344,6 +347,8 @@ http_new(int client_fd) {
     buffer_init(&ret->response_write_buffer, N(ret->raw_response_write_buffer), ret->raw_response_write_buffer);
 
     buffer_init(&ret->transf_read_buffer, N(ret->raw_transf_read_buffer), ret->raw_transf_read_buffer);
+
+    ret->orig.aux_response_state = response_HTTP_version;
 
     ret->references = 1;
     finally:
@@ -507,6 +512,7 @@ request_read(struct selector_key *key) {
                 d->parser.state = request_header_field_name;
                 request_consume(b, &d->parser, &error, &d->accum);
                 ret = request_process(key, d);
+
                 while (buffer_can_read(b)) {
                     const uint8_t c = buffer_read(b);
                     if (buffer_can_write(&d->accum)) {
@@ -810,8 +816,12 @@ request_write(struct selector_key *key) {
 
         if (!buffer_can_read(b)) {
             if (d->status == status_succeeded) {
-                ret = RESPONSE;
-                selector_set_interest(key->s, *d->client_fd, OP_NOOP);
+//                ret = RESPONSE;
+//                selector_set_interest(key->s, *d->client_fd, OP_NOOP);
+//                selector_set_interest(key->s, *d->origin_fd, OP_READ);
+
+                ret = COPY;
+                selector_set_interest(key->s, *d->client_fd, OP_READ);
                 selector_set_interest(key->s, *d->origin_fd, OP_READ);
             } else {
                 ret = DONE;
@@ -890,6 +900,18 @@ copy_r(struct selector_key *key) {
 
     assert(*d->fd == key->fd);
 
+    if(*d->fd == ATTACHMENT(key)->origin_fd) {
+        selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_NOOP);
+        return RESPONSE;
+
+        printf("SOY ORIG COPY\n");
+
+    } else {
+
+        printf("SOY CLIENT COPY\n");
+
+    }
+
     size_t size;
     ssize_t n;
     buffer *b = d->rb;
@@ -898,18 +920,21 @@ copy_r(struct selector_key *key) {
     uint8_t *ptr = buffer_write_ptr(b, &size);
     n = recv(key->fd, ptr, size, 0);
     if (n <= 0) {
-        shutdown(*d->fd, SHUT_RD);
-        d->duplex &= ~OP_READ;
-        if (*d->other->fd != -1) {
-            shutdown(*d->other->fd, SHUT_WR);
-            d->other->duplex &= ~OP_WRITE;
-        }
+//        shutdown(*d->fd, SHUT_RD);
+//        d->duplex &= ~OP_READ;
+//        if (*d->other->fd != -1) {
+//            shutdown(*d->other->fd, SHUT_WR);
+//            d->other->duplex &= ~OP_WRITE;
+//        }
     } else {
         buffer_write_adv(b, n);
+
+
+
     }
     copy_compute_interests(key->s, d);
     copy_compute_interests(key->s, d->other);
-    selector_set_interest(key->s, ATTACHMENT(key)->origin_fd, OP_READ);
+//    selector_set_interest(key->s, ATTACHMENT(key)->origin_fd, OP_READ);
     if (d->duplex == OP_NOOP) {
         ret = DONE;
     }
@@ -1116,7 +1141,15 @@ response_init(const unsigned state, struct selector_key *key) {
 
 //    // desencolo una request
 //    set_request(d, queue_remove(ATTACHMENT(key)->session.request_queue));
-    response_parser_init(&d->response_parser);
+
+        if(!d->response_parser_initialized) {
+            response_parser_init(&d->response_parser);
+            d->response_parser_initialized = true;
+        } else {
+
+            d->response_parser.state = ATTACHMENT(key)->orig.aux_response_state;
+        }
+
 }
 
 /**
@@ -1144,20 +1177,22 @@ response_read(struct selector_key *key) {
     if (n > 0 || buffer_can_read(b)) {
         buffer_write_adv(b, n);
 
-        enum response_state st = response_consume(b, &d->response_parser, &error, d->wb);
+        enum response_state st = response_consume(b, &d->response_parser, &error, d->wb, &n);
+
+        ATTACHMENT(key)->orig.aux_response_state = st;
 
         if (st == response_done) {
 
             if (d->response_parser.response->status_code == 200
                 && d->response_parser.response->method != http_method_HEAD) {
 
-                if (validate_media_type(d->response_parser.content_type_medias, parameters->mts)) {
-                    selector_status ss = SELECTOR_SUCCESS;
-                    ss |= selector_set_interest_key(key, OP_NOOP);
-                    ss |= selector_set_interest(key->s, ATTACHMENT(key)->origin_fd, OP_NOOP);
-
-                    return ss == SELECTOR_SUCCESS ? TRANSFORMATION : ERROR;
-                }
+//                if (validate_media_type(d->response_parser.content_type_medias, parameters->mts)) {
+//                    selector_status ss = SELECTOR_SUCCESS;
+//                    ss |= selector_set_interest_key(key, OP_NOOP);
+//                    ss |= selector_set_interest(key->s, ATTACHMENT(key)->origin_fd, OP_NOOP);
+//
+//                    return ss == SELECTOR_SUCCESS ? TRANSFORMATION : ERROR;
+//                }
 
             }
 
@@ -1167,6 +1202,24 @@ response_read(struct selector_key *key) {
 
             } else if (d->response_parser.response->content_length_present) {
 
+                char chunk_size[12];
+                sprintf(chunk_size, "%X\r\n", (unsigned int) n);
+
+                write_buffer_string(d->wb, chunk_size);
+                write_buffer_string(d->wb, b->read);
+                write_buffer_string(d->wb, "\r\n");
+
+                if(n >= d->response_parser.response->content_length) {
+                    // Last-chunk
+                    write_buffer_string(d->wb, "0\r\n");
+
+                    // Last CRLF
+                    write_buffer_string(d->wb, "\r\n");
+                } else {
+
+                    d->response_parser.response->content_length = d->response_parser.response->content_length - n;
+
+                }
 
             } else {
 
@@ -1225,17 +1278,18 @@ response_write(struct selector_key *key) {
 
 
         if (!buffer_can_read(b)) {
-            if (d->response_parser.state != response_done) {
+//            if (d->response_parser.state != response_done) {
 
                 selector_status ss = SELECTOR_SUCCESS;
-                ss |= selector_set_interest_key(key, OP_NOOP);
+//                ss |= selector_set_interest_key(key, OP_NOOP);
                 ss |= selector_set_interest(key->s, ATTACHMENT(key)->origin_fd, OP_READ);
-                ret = ss == SELECTOR_SUCCESS ? RESPONSE : ERROR;
-            } else {
+                ss |= selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_READ);
+                ret = ss == SELECTOR_SUCCESS ? COPY : ERROR;
+//            } else {
 
 //                ret = response_process(key, d);
-                ret = DONE;
-            }
+//                ret = DONE;
+//            }
 
         }
     }

@@ -19,7 +19,7 @@ HTTP_version(const uint8_t c, struct response_parser *p) {
 
     // The parser should be NULL after method sub parser destruction.
     if (p->http_sub_parser == NULL) {
-        struct parser_definition d = parser_utils_strcmpi("HTTP/1.1");
+        struct parser_definition d = parser_utils_strcmpi("HTTP/1.1"); //TODO
         p->http_sub_parser = parser_init(parser_no_classes(), &d);
     }
 
@@ -175,7 +175,7 @@ parse_transfer_encoding(const uint8_t c, struct response_parser *p) {
     }
 
     if (p->http_sub_parser == NULL) {
-        struct parser_definition d = parser_utils_strcmpi("chunked");
+        struct parser_definition d = parser_utils_strcmpi("chunked"); //TODO
         p->http_sub_parser = parser_init(parser_no_classes(), &d);
     }
 
@@ -205,6 +205,17 @@ parse_transfer_encoding(const uint8_t c, struct response_parser *p) {
 }
 
 static enum response_state
+LF_after_header_value_content_length(const uint8_t c, struct response_parser *p) {
+    enum response_state next;
+
+    if (c == '\n') {
+        return response_header_field_name;
+    }
+
+    return response_error;
+}
+
+static enum response_state
 parse_content_length(const uint8_t c, struct response_parser *p) {
     enum response_state next;
 
@@ -220,7 +231,7 @@ parse_content_length(const uint8_t c, struct response_parser *p) {
         if (!p->response->content_length_present) {
             return response_error; //todo: MISSING LENGTH
         } else {
-            return response_LF_after_header_value;
+            return response_LF_after_header_value_content_length;
         }
     }
 
@@ -252,6 +263,7 @@ parse_content_type(const uint8_t c, struct response_parser *p) {
         if (strlen(p->content_type_medias) == 0) {
             return response_error;
         } else {
+            p->i = 0;
             return response_LF_after_header_value;
         }
     }
@@ -277,11 +289,13 @@ parse_content_type(const uint8_t c, struct response_parser *p) {
 }
 
 static enum response_state
-header_field_name(const uint8_t c, struct response_parser *p) {
+header_field_name(const uint8_t c, struct response_parser *p, buffer *accum) {
     enum response_state next;
 
     // If CRLF is found, headers field are over and this is the Empty Line.
     if (strlen(p->header_field_name) == 0 && c == '\r') {
+
+        buffer_write(accum, '\r');
 
         return response_empty_line_waiting_for_LF;
 
@@ -294,23 +308,31 @@ header_field_name(const uint8_t c, struct response_parser *p) {
 
         char *aux = strtolower(p->header_field_name, p->i);
 
-        if (strcmp(aux, "transfer-enconding") == 0) {
-            p->i = 0;
-            memset(p->header_field_name, '\0', MAX_HEADER_FIELD_NAME_SIZE);
-            next = response_parse_transfer_encoding;
 
-        } else if (strcmp(aux, "content-length") == 0) {
+        if (strcmp(aux, "content-length") == 0) {
             p->i = 0;
             memset(p->header_field_name, '\0', MAX_HEADER_FIELD_NAME_SIZE);
             next = response_parse_content_length;
 
-        } else if (strcmp(aux, "content-type") == 0) {
-            p->i = 0;
-            memset(p->header_field_name, '\0', MAX_HEADER_FIELD_NAME_SIZE);
-            next = response_parse_content_type;
+            write_buffer_string(accum, "Transfer-Encoding: chunked\r\n");
 
         } else {
-            next = response_header_value;
+
+            if (strcmp(aux, "transfer-encoding") == 0) {
+                next = response_parse_transfer_encoding;
+
+            } else if (strcmp(aux, "content-type") == 0) {
+                next = response_parse_content_type;
+
+            } else {
+                next = response_header_value;
+            }
+
+            write_buffer_string(accum, p->header_field_name);
+            buffer_write(accum, ':');
+            memset(p->header_field_name, '\0', MAX_HEADER_FIELD_NAME_SIZE);
+            p->i = 0;
+
         }
 
 //        memset(aux, '\0', sizeof(aux));
@@ -422,7 +444,7 @@ response_parser_feed(struct response_parser *p, const uint8_t c, buffer *accum) 
             next = CR_after_reason_phrase(c, p);
             break;
         case response_header_field_name:
-            next = header_field_name(c, p);
+            next = header_field_name(c, p, accum);
             break;
         case response_parse_transfer_encoding:
             next = parse_transfer_encoding(c, p);
@@ -441,6 +463,9 @@ response_parser_feed(struct response_parser *p, const uint8_t c, buffer *accum) 
             break;
         case response_LF_after_header_value:
             next = LF_after_header_value(c, p);
+            break;
+        case response_LF_after_header_value_content_length:
+            next = LF_after_header_value_content_length(c,p);
             break;
         case response_empty_line_waiting_for_LF:
             next = empty_line_waiting_for_LF(c, p);
@@ -469,25 +494,34 @@ response_is_done(const enum response_state st, bool *errored) {
 }
 
 extern enum response_state
-response_consume(buffer *b, struct response_parser *p, bool *errored, buffer *accum) {
+response_consume(buffer *b, struct response_parser *p, bool *errored, buffer *accum, ssize_t * bytesRead) {
     enum response_state st = p->state;
+
+    // Return if response headers are already parsed
+    if(st == response_done) {
+        return st;
+    }
 
     while (buffer_can_read(b)) {
         const uint8_t c = buffer_read(b);
 
-        st = response_parser_feed(p, c, accum);
-
         if (buffer_can_write(accum)) {
-            buffer_write(accum, c);
+            if (st != response_header_field_name
+                && st != response_parse_content_length && st != response_LF_after_header_value_content_length)
+                buffer_write(accum, c);
         } else {
             st = response_error;
         }
+
+        st = response_parser_feed(p, c, accum);
+
+        // Decrease bytesRead (n from response_read) so we can know the current received body length in response_read
+        *bytesRead = *bytesRead - 1;
 
         if (response_is_done(st, errored)) {
             break;
         }
     }
-
 
     return st;
 }
