@@ -451,7 +451,7 @@ ignore_header(const uint8_t c, struct request_parser *p) {
     if (c == '\r') {
         p->i = 0;
         memset(p->header_field_value, '\0', MAX_HEADER_FIELD_VALUE_SIZE);
-        return LF_end;
+        return ignore_LF_end;
     }
     if ((int) p->i == MAX_HEADER_FIELD_VALUE_SIZE) {
         //TODO: too long header field specific error?
@@ -590,6 +590,13 @@ request_parser_feed(struct request_parser *p, const uint8_t c, buffer *accum) {
         case request_waiting_for_LF:
             next = LFEND(c, p, accum);
             break;
+        case ignore_LF_end:
+            if(c== '\n'){
+                next=request_header_field_name;
+            } else {
+                next = request_error;
+            }
+            break;
         case request_content_length:
             next= content_length(c,p);
             break;
@@ -683,7 +690,7 @@ request_consume(buffer *b, struct request_parser *p, bool *errored, buffer *accu
 
         if (st != request_no_empty_host
             && st != request_header_field_name
-            && st != request_ignore_header) {
+            && st != request_ignore_header && st!=ignore_LF_end) {
             if (buffer_can_write(accum)) {
                 buffer_write(accum, c);
             } else {

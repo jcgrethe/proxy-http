@@ -102,20 +102,6 @@ enum http_state {
      *   - DONE     cuando no queda nada mas por copiar.
      */
             COPY,
-
-    /**
-     * Copia bytes del client_fd al origin_fd.
-     *
-     * Intereses:
-     *   - OP_READ  si hay espacio para escribir en el buffer de lectura del origin_fd
-     *   - OP_WRITE si hay bytes para leer en el buffer de escritura del client_fd
-     *
-     * Transicion:
-     *   - //DONE         cuando no queda nada mas por copiar.
-     *   - RESPONSE       cuando no queda nada mas por copiar
-     */
-            COPY_REQUEST_BODY,
-
     /**
      *  Lee la respuesta del origin server y se la envia al cliente
      *
@@ -857,56 +843,8 @@ copy_init(const unsigned state, struct selector_key *key) {
     d->origin_fd = &ATTACHMENT(key)->origin_fd;
     d->rb = &(ATTACHMENT(key)->read_buffer);
     d->wb = &(ATTACHMENT(key)->write_buffer);
-    selector_set_interest(key->s,*d->client_fd,OP_READ);
-    //    struct copy *d = &ATTACHMENT(key)->client.copy;
-//
-//    d->fd = &ATTACHMENT(key)->client_fd;
-//    d->rb = &ATTACHMENT(key)->read_buffer;
-//    d->wb = &ATTACHMENT(key)->write_buffer;
-//    d->duplex = OP_READ | OP_WRITE;
-//    d->other = &ATTACHMENT(key)->orig.copy;
-//
-//    d = &ATTACHMENT(key)->orig.copy;
-//    d->fd = &ATTACHMENT(key)->origin_fd;
-//    d->rb = &ATTACHMENT(key)->write_buffer;
-//    d->wb = &ATTACHMENT(key)->read_buffer;
-//    d->duplex = OP_READ | OP_WRITE;
-//    d->other = &ATTACHMENT(key)->client.copy;
+    selector_set_interest(key->s, *d->client_fd, OP_READ);
 }
-
-/**
- * Computa los intereses en base a la disponiblidad de los buffer.
- * La variable duplex nos permite saber si alguna vía ya fue cerrada.
- * Arrancá OP_READ | OP_WRITE.
- */
-//static fd_interest
-//copy_compute_interests(fd_selector s, struct copy *d) {
-//    fd_interest ret = OP_NOOP;
-//    if ((d->duplex & OP_READ) && buffer_can_write(d->rb)) {
-//        ret |= OP_READ;
-//    }
-//    if ((d->duplex & OP_WRITE) && buffer_can_read(d->wb)) {
-//        ret |= OP_WRITE;
-//    }
-//    if (SELECTOR_SUCCESS != selector_set_interest(s, *d->fd, ret)) {
-//        abort();
-//    }
-//    return ret;
-//}
-//
-///** elige la estructura de copia correcta de cada fd (origin o client) */
-//static struct copy *
-//copy_ptr(struct selector_key *key) {
-//    struct copy *d = &ATTACHMENT(key)->client.copy;
-//
-//    if (*d->fd == key->fd) {
-//        // ok
-//    } else {
-//        d = d->other;
-//    }
-//    return d;
-//}
-
 /** lee bytes de un socket y los encola para ser escritos en otro socket */
 static unsigned
 copy_r(struct selector_key *key) {
@@ -1091,7 +1029,6 @@ response_read(struct selector_key *key) {
 
                 char chunk_size[12];
                 sprintf(chunk_size, "%X\r\n", (unsigned int) n);
-
                 write_buffer_string(d->wb, chunk_size);
                 write_buffer_string(d->wb, b->read);
                 write_buffer_string(d->wb, "\r\n");
@@ -1103,9 +1040,11 @@ response_read(struct selector_key *key) {
                     // Last CRLF
                     write_buffer_string(d->wb, "\r\n");
                 } else {
-
                     d->response_parser.response->content_length = d->response_parser.response->content_length - n;
-
+                    selector_status ss = SELECTOR_SUCCESS;
+                    ss |= selector_set_interest_key(key, OP_NOOP);
+                    ss |= selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_WRITE);
+                    return ss == SELECTOR_SUCCESS ? RESPONSE : ERROR;
                 }
 
             } else {
@@ -1170,8 +1109,8 @@ response_write(struct selector_key *key) {
             selector_status ss = SELECTOR_SUCCESS;
 //                ss |= selector_set_interest_key(key, OP_NOOP);
             ss |= selector_set_interest(key->s, ATTACHMENT(key)->origin_fd, OP_READ);
-            ss |= selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_READ);
-            ret = ss == SELECTOR_SUCCESS ? COPY : ERROR;
+//            ss |= selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_READ);
+//            ret = ss == SELECTOR_SUCCESS ? COPY : ERROR;
 //            } else {
 
 //                ret = response_process(key, d);

@@ -57,6 +57,7 @@ enum request_state {
     request_empty_line_waiting_for_LF,
     request_content_length,
     request_no_empty_host,
+    ignore_LF_end,
     request_dstaddr_fqdn,
     request_dstaddr,
     request_dstport,
