@@ -481,7 +481,7 @@ request_init(const unsigned state, struct selector_key *key) {
     d->origin_domain = &ATTACHMENT(key)->origin_domain;
 
     d->request.port = (uint16_t) 80;
-
+    d->request.content_length=0;
     d->raw_buff_accum = calloc(1, 1024 * 1024);
     buffer_init(&d->accum, 1024 * 1024, d->raw_buff_accum);
     d->request.host = calloc(1, MAX_HEADER_FIELD_VALUE_SIZE); //todo: FREE
@@ -508,25 +508,26 @@ request_read(struct selector_key *key) {
         buffer_write_adv(b, n);
         int st = request_consume(b, &d->parser, &error, &d->accum);
         if (request_is_done(st, 0)) {
-            if (strlen(d->request.host) != 0) {
-                d->parser.state = request_header_field_name;
-                request_consume(b, &d->parser, &error, &d->accum);
-                ret = request_process(key, d);
-
-                while (buffer_can_read(b)) {
-                    const uint8_t c = buffer_read(b);
-                    if (buffer_can_write(&d->accum)) {
-                        buffer_write(&d->accum, c);
-                    }
-                }
+            ret = request_process(key, d);
+//            if (strlen(d->request.host) != 0) {
+//                d->parser.state = request_header_field_name;
+//                request_consume(b, &d->parser, &error, &d->accum);
+//                ret = request_process(key, d);
+//
+//                while (buffer_can_read(b)) {
+//                    const uint8_t c = buffer_read(b);
+//                    if (buffer_can_write(&d->accum)) {
+//                        buffer_write(&d->accum, c);
+//                    }
+//                }
 
 //                ret = COPY;
 //                selector_set_interest(key->s, *d->client_fd, OP_READ);
 //                selector_set_interest(key->s, *d->origin_fd, OP_NOOP);
-
-            } else if (st == request_error_unsupported_method) {
-                return request_process(key, d);
-            }
+//
+//            } else if (st == request_error_unsupported_method) {
+//                return request_process(key, d);
+//            }
 
         }
     } else {
@@ -535,8 +536,8 @@ request_read(struct selector_key *key) {
 
 
     // TODO: vuela error en rquest_consume?
-    //return error ? ERROR : ret;
-    return ret;
+    return error ? ERROR : ret;
+    //return ret;
 }
 
 static unsigned
@@ -817,12 +818,13 @@ request_write(struct selector_key *key) {
 
         if (!buffer_can_read(b)) {
             if (d->status == status_succeeded) {
-                ret = RESPONSE;
-//                selector_set_interest(key->s, *d->client_fd, OP_NOOP);
-//                selector_set_interest(key->s, *d->origin_fd, OP_READ);
-
-                selector_set_interest_key(key, OP_READ);
-
+                if(d->request.content_length==0) {
+                    ret = RESPONSE;
+                    selector_set_interest_key(key, OP_READ);
+                }else{
+                    ret= COPY;
+                    selector_set_interest_key(key,OP_NOOP);
+                }
 //                ret = COPY;
 //                selector_set_interest(key->s, *d->client_fd, OP_READ);
                // selector_set_interest_key(key, OP_NOOP);
@@ -849,20 +851,27 @@ request_write(struct selector_key *key) {
 
 static void
 copy_init(const unsigned state, struct selector_key *key) {
-    struct copy *d = &ATTACHMENT(key)->client.copy;
+    struct request_st *d = &ATTACHMENT(key)->client.request;
 
-    d->fd = &ATTACHMENT(key)->client_fd;
-    d->rb = &ATTACHMENT(key)->read_buffer;
-    d->wb = &ATTACHMENT(key)->write_buffer;
-    d->duplex = OP_READ | OP_WRITE;
-    d->other = &ATTACHMENT(key)->orig.copy;
-
-    d = &ATTACHMENT(key)->orig.copy;
-    d->fd = &ATTACHMENT(key)->origin_fd;
-    d->rb = &ATTACHMENT(key)->write_buffer;
-    d->wb = &ATTACHMENT(key)->read_buffer;
-    d->duplex = OP_READ | OP_WRITE;
-    d->other = &ATTACHMENT(key)->client.copy;
+    d->client_fd = &ATTACHMENT(key)->client_fd;
+    d->origin_fd = &ATTACHMENT(key)->origin_fd;
+    d->rb = &(ATTACHMENT(key)->read_buffer);
+    d->wb = &(ATTACHMENT(key)->write_buffer);
+    selector_set_interest(key->s,*d->client_fd,OP_READ);
+    //    struct copy *d = &ATTACHMENT(key)->client.copy;
+//
+//    d->fd = &ATTACHMENT(key)->client_fd;
+//    d->rb = &ATTACHMENT(key)->read_buffer;
+//    d->wb = &ATTACHMENT(key)->write_buffer;
+//    d->duplex = OP_READ | OP_WRITE;
+//    d->other = &ATTACHMENT(key)->orig.copy;
+//
+//    d = &ATTACHMENT(key)->orig.copy;
+//    d->fd = &ATTACHMENT(key)->origin_fd;
+//    d->rb = &ATTACHMENT(key)->write_buffer;
+//    d->wb = &ATTACHMENT(key)->read_buffer;
+//    d->duplex = OP_READ | OP_WRITE;
+//    d->other = &ATTACHMENT(key)->client.copy;
 }
 
 /**
@@ -870,115 +879,132 @@ copy_init(const unsigned state, struct selector_key *key) {
  * La variable duplex nos permite saber si alguna vía ya fue cerrada.
  * Arrancá OP_READ | OP_WRITE.
  */
-static fd_interest
-copy_compute_interests(fd_selector s, struct copy *d) {
-    fd_interest ret = OP_NOOP;
-    if ((d->duplex & OP_READ) && buffer_can_write(d->rb)) {
-        ret |= OP_READ;
-    }
-    if ((d->duplex & OP_WRITE) && buffer_can_read(d->wb)) {
-        ret |= OP_WRITE;
-    }
-    if (SELECTOR_SUCCESS != selector_set_interest(s, *d->fd, ret)) {
-        abort();
-    }
-    return ret;
-}
-
-/** elige la estructura de copia correcta de cada fd (origin o client) */
-static struct copy *
-copy_ptr(struct selector_key *key) {
-    struct copy *d = &ATTACHMENT(key)->client.copy;
-
-    if (*d->fd == key->fd) {
-        // ok
-    } else {
-        d = d->other;
-    }
-    return d;
-}
+//static fd_interest
+//copy_compute_interests(fd_selector s, struct copy *d) {
+//    fd_interest ret = OP_NOOP;
+//    if ((d->duplex & OP_READ) && buffer_can_write(d->rb)) {
+//        ret |= OP_READ;
+//    }
+//    if ((d->duplex & OP_WRITE) && buffer_can_read(d->wb)) {
+//        ret |= OP_WRITE;
+//    }
+//    if (SELECTOR_SUCCESS != selector_set_interest(s, *d->fd, ret)) {
+//        abort();
+//    }
+//    return ret;
+//}
+//
+///** elige la estructura de copia correcta de cada fd (origin o client) */
+//static struct copy *
+//copy_ptr(struct selector_key *key) {
+//    struct copy *d = &ATTACHMENT(key)->client.copy;
+//
+//    if (*d->fd == key->fd) {
+//        // ok
+//    } else {
+//        d = d->other;
+//    }
+//    return d;
+//}
 
 /** lee bytes de un socket y los encola para ser escritos en otro socket */
 static unsigned
 copy_r(struct selector_key *key) {
-    struct copy *d = copy_ptr(key);
+    struct request_st *d = &ATTACHMENT(key)->client.request;
 
-    assert(*d->fd == key->fd);
-
-    if (*d->fd == ATTACHMENT(key)->origin_fd) {
-        selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_NOOP);
-        return RESPONSE;
-
-        printf("SOY ORIG COPY\n");
-
-    } else {
-
-        printf("SOY CLIENT COPY\n");
-
-    }
-
-    size_t size;
+    buffer *b = d->wb;
+    uint8_t *ptr;
+    size_t count;
     ssize_t n;
-    buffer *b = d->rb;
-    unsigned ret = COPY;
 
-    uint8_t *ptr = buffer_write_ptr(b, &size);
-    n = recv(key->fd, ptr, size, 0);
-    if (n <= 0) {
-//        shutdown(*d->fd, SHUT_RD);
-//        d->duplex &= ~OP_READ;
-//        if (*d->other->fd != -1) {
-//            shutdown(*d->other->fd, SHUT_WR);
-//            d->other->duplex &= ~OP_WRITE;
-//        }
-    } else {
+    ptr = buffer_write_ptr(b, &count);
+    n = recv(key->fd, ptr, count, 0);
+    if (n > 0) {
         buffer_write_adv(b, n);
-
-
+        selector_set_interest(key->s, *d->origin_fd, OP_WRITE);
+    } else {
+        return ERROR;
     }
-    copy_compute_interests(key->s, d);
-    copy_compute_interests(key->s, d->other);
-//    selector_set_interest(key->s, ATTACHMENT(key)->origin_fd, OP_READ);
-    if (d->duplex == OP_NOOP) {
-        ret = DONE;
-    }
-    return ret;
+    return COPY;
 }
+//    uint8_t *ptr = buffer_write_ptr(b, &size);
+//    n = recv(key->fd, ptr, size, 0);
+//    if (n <= 0) {
+////        shutdown(*d->fd, SHUT_RD);
+////        d->duplex &= ~OP_READ;
+////        if (*d->other->fd != -1) {
+////            shutdown(*d->other->fd, SHUT_WR);
+////            d->other->duplex &= ~OP_WRITE;
+////        }
+//    } else {
+//        buffer_write_adv(b, n);
+//
+//
+//    }
+//    copy_compute_interests(key->s, d);
+//    copy_compute_interests(key->s, d->other);
+////    selector_set_interest(key->s, ATTACHMENT(key)->origin_fd, OP_READ);
+//    if (d->duplex == OP_NOOP) {
+//        ret = DONE;
+//    }
+//    return ret;
+//}
 
 /** escribe bytes encolados */
 static unsigned
 copy_w(struct selector_key *key) {
-    struct copy *d = copy_ptr(key);
-
-    assert(*d->fd == key->fd);
-    size_t size;
-    ssize_t n;
+    struct request_st *d = &ATTACHMENT(key)->client.request;
     buffer *b = d->wb;
-    unsigned ret = COPY;
+    uint8_t *ptr;
+    size_t count;
+    ssize_t n;
 
-    uint8_t *ptr = buffer_read_ptr(b, &size);
-    n = send(key->fd, ptr, size, MSG_NOSIGNAL);
+    ptr = buffer_read_ptr(b, &count);
+    n = send(key->fd, ptr, count, MSG_NOSIGNAL);
+    buffer_read_adv(b, n);
     if (n == -1) {
-        shutdown(*d->fd, SHUT_WR);
-        d->duplex &= ~OP_WRITE;
-        if (*d->other->fd != -1) {
-            shutdown(*d->other->fd, SHUT_RD);
-            d->other->duplex &= ~OP_READ;
-        }
+        return ERROR;
     } else {
-        /* Metrics Start. */
-        metrstr->transfby->tfbyt_ll += n;
-        /* Metrics end.   */
-
-        buffer_read_adv(b, n);
+        d->request.content_length=d->request.content_length-n;
+        if(d->request.content_length<= 0){
+            return RESPONSE;
+        }
     }
-    copy_compute_interests(key->s, d);
-    copy_compute_interests(key->s, d->other);
-    if (d->duplex == OP_NOOP) {
-        ret = DONE;
-    }
-    return ret;
+    selector_set_interest(key->s,*d->origin_fd,OP_NOOP);
+    selector_set_interest(key->s,*d->client_fd,OP_READ);
+    return COPY;
 }
+//    struct copy *d = copy_ptr(key);
+//
+//    assert(*d->fd == key->fd);
+//    size_t size;
+//    ssize_t n;
+//    buffer *b = d->wb;
+//    unsigned ret = COPY;
+//
+//    uint8_t *ptr = buffer_read_ptr(b, &size);
+//    n = send(key->fd, ptr, size, MSG_NOSIGNAL);
+//    if (n == -1) {
+//        shutdown(*d->fd, SHUT_WR);
+//        d->duplex &= ~OP_WRITE;
+//        if (*d->other->fd != -1) {
+//            shutdown(*d->other->fd, SHUT_RD);
+//            d->other->duplex &= ~OP_READ;
+//        }
+//    } else {
+//        /* Metrics Start. */
+//        metrstr->transfby->tfbyt_ll += n;
+//        /* Metrics end.   */
+//
+//        buffer_read_adv(b, n);
+//    }
+//    copy_compute_interests(key->s, d);
+//    copy_compute_interests(key->s, d->other);
+//    if (d->duplex == OP_NOOP) {
+//        ret = DONE;
+//    }
+//    return ret;
+//}
 
 //////////////////////////////////////////////////////////////////////////////////
 //// COPY REQUEST BODY

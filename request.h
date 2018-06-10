@@ -36,7 +36,7 @@ struct request {
     union socks_addr dest_addr;
     char *host;
     in_port_t port;
-    int content_length;
+    double content_length;
     struct response *response;
 };
 
@@ -55,6 +55,7 @@ enum request_state {
     request_OWS_after_value,
     request_waiting_for_LF,
     request_empty_line_waiting_for_LF,
+    request_content_length,
     request_no_empty_host,
     request_dstaddr_fqdn,
     request_dstaddr,

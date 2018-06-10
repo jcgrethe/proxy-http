@@ -358,11 +358,19 @@ header_field_name(const uint8_t c, struct request_parser *p, buffer *b) {
             memset(p->header_field_name, '\0', MAX_HEADER_FIELD_NAME_SIZE);
             next = request_ignore_header;
         } else {
+            if(strcmp(aux,"content-length")==0){
+                write_buffer_string(b, p->header_field_name);
+                memset(p->header_field_name, '\0', MAX_HEADER_FIELD_NAME_SIZE);
+                p->i = 0;
+                next= request_content_length;
 
-            write_buffer_string(b, p->header_field_name);
-            memset(p->header_field_name, '\0', MAX_HEADER_FIELD_NAME_SIZE);
 
-            next = request_header_value;
+            } else {
+                write_buffer_string(b, p->header_field_name);
+                memset(p->header_field_name, '\0', MAX_HEADER_FIELD_NAME_SIZE);
+                p->i = 0;
+                next = request_header_value;
+            }
         }
 
         free(aux);
@@ -388,6 +396,31 @@ header_field_name(const uint8_t c, struct request_parser *p, buffer *b) {
     ((uint8_t *) &(p->header_field_name))[p->i++] = c;
     next = request_header_field_name;
     return next;
+}
+
+static enum request_state
+content_length(const uint8_t c,struct request_parser *p){
+    if(c==' ' || c=='\t'){
+        if(p->request->content_length==0){
+            return request_content_length;
+        } else{
+           p->request->content_length= atof(p->header_field_name);
+           memset(p->header_field_name, '\0', MAX_HEADER_FIELD_NAME_SIZE);
+           p->i = 0;
+           return request_OWS_after_value;
+        }
+    }
+    if(c=='\r'){
+        p->request->content_length= atof(p->header_field_name);
+        memset(p->header_field_name, '\0', MAX_HEADER_FIELD_NAME_SIZE);
+        p->i = 0;
+        return request_waiting_for_LF;
+    }
+    if(isdigit(c)){
+        ((uint8_t *) &(p->header_field_name))[p->i++] = c;
+        return request_content_length;
+    } else
+        return request_error;
 }
 
 static enum request_state
@@ -553,6 +586,9 @@ request_parser_feed(struct request_parser *p, const uint8_t c, buffer *accum) {
             break;
         case request_waiting_for_LF:
             next = LFEND(c, p, accum);
+            break;
+        case request_content_length:
+            next= content_length(c,p);
             break;
         case request_empty_line_waiting_for_LF:
             next = empty_line(c, p);
