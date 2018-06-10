@@ -73,6 +73,7 @@ enum request_state {
     request_error_unsupported_version,
     request_error_too_long_request_target,
     request_error_CRLF_not_found,
+    aux_state,
 
 };
 

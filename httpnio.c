@@ -196,7 +196,9 @@ struct response_st {
     struct request *request;
     struct response_parser response_parser;
 
+    enum response_state aux;
     bool response_parser_initialized;
+    struct  response_parser  *aux_parser;
 };
 
 /** usado por TRANSFORMATION */
@@ -320,7 +322,7 @@ http_new(int client_fd) {
     struct http *ret;
 
     if (pool == NULL) {
-        ret = malloc(sizeof(*ret));
+        ret = calloc(1,sizeof(*ret));
     } else {
         ret = pool;
         pool = pool->next;
@@ -898,7 +900,7 @@ static unsigned
 copy_r(struct selector_key *key) {
     struct copy *d = copy_ptr(key);
 
-    assert(*d->fd == key->fd);
+  //  assert(*d->fd == key->fd);
 
     if(*d->fd == ATTACHMENT(key)->origin_fd) {
         selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_NOOP);
@@ -1145,9 +1147,8 @@ response_init(const unsigned state, struct selector_key *key) {
         if(!d->response_parser_initialized) {
             response_parser_init(&d->response_parser);
             d->response_parser_initialized = true;
-        } else {
-
-            d->response_parser.state = ATTACHMENT(key)->orig.aux_response_state;
+            d->aux_parser=calloc(1, sizeof(d->response_parser));
+            d->aux=aux_state;
         }
 
 }
@@ -1165,7 +1166,7 @@ response_read(struct selector_key *key) {
     struct response_st *d = &ATTACHMENT(key)->orig.response;
     unsigned ret = RESPONSE;
     bool error = false;
-
+    enum response_state st;
     buffer *b = d->rb;
     uint8_t *ptr;
     size_t count;
@@ -1173,14 +1174,13 @@ response_read(struct selector_key *key) {
 
     ptr = buffer_write_ptr(b, &count);
     n = recv(key->fd, ptr, count, 0);
-
+    if( d->aux != aux_state) {
+        memcpy(&d->response_parser,d->aux_parser,sizeof(d->response_parser));
+    }
     if (n > 0 || buffer_can_read(b)) {
         buffer_write_adv(b, n);
-
-        enum response_state st = response_consume(b, &d->response_parser, &error, d->wb, &n);
-
-        ATTACHMENT(key)->orig.aux_response_state = st;
-
+            st = response_consume(b, &d->response_parser, &error, d->wb, &n);
+            d->aux=st;
         if (st == response_done) {
 
             if (d->response_parser.response->status_code == 200
@@ -1234,7 +1234,7 @@ response_read(struct selector_key *key) {
         ss |= selector_set_interest_key(key, OP_NOOP);
         ss |= selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_WRITE);
         ret = ss == SELECTOR_SUCCESS ? RESPONSE : ERROR;
-
+        memcpy(d->aux_parser,&d->response_parser, sizeof(d->response_parser));
         if (ret == RESPONSE && response_is_done(st, 0)) {
 //            log_request(d->request);
 //            log_response(d->request->response);
@@ -1283,7 +1283,7 @@ response_write(struct selector_key *key) {
                 selector_status ss = SELECTOR_SUCCESS;
 //                ss |= selector_set_interest_key(key, OP_NOOP);
                 ss |= selector_set_interest(key->s, ATTACHMENT(key)->origin_fd, OP_READ);
-                ss |= selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_READ);
+                ss |= selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_WRITE);
                 ret = ss == SELECTOR_SUCCESS ? COPY : ERROR;
 //            } else {
 
@@ -1315,7 +1315,7 @@ response_process(struct selector_key *key, struct response_st *d) {
 
 static void
 response_close(struct response_parser *p, struct selector_key *key) {
-    struct response_st *d = &ATTACHMENT(key)->orig.response;
+    //struct response_st *d = &ATTACHMENT(key)->orig.response;
 //    response_parser_close(&d->response_parser);
 }
 
