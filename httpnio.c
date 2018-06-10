@@ -1003,9 +1003,6 @@ response_read(struct selector_key *key) {
         buffer_write_adv(b, n);
 
         enum response_state st = response_consume(b, &d->response_parser, &error, d->wb, &n);
-
-        ATTACHMENT(key)->orig.aux_response_state = st;
-
         if (st == response_done) {
 
             if (d->response_parser.response->status_code == 200
@@ -1030,15 +1027,15 @@ response_read(struct selector_key *key) {
                 char chunk_size[12];
                 sprintf(chunk_size, "%X\r\n", (unsigned int) n);
                 write_buffer_string(d->wb, chunk_size);
-                write_buffer_string(d->wb, b->read);
+                write_buffer_buffer(d->wb, b);
                 write_buffer_string(d->wb, "\r\n");
-
                 if (n >= d->response_parser.response->content_length) {
                     // Last-chunk
                     write_buffer_string(d->wb, "0\r\n");
 
                     // Last CRLF
                     write_buffer_string(d->wb, "\r\n");
+
                 } else {
                     d->response_parser.response->content_length = d->response_parser.response->content_length - n;
                     selector_status ss = SELECTOR_SUCCESS;
@@ -1080,6 +1077,7 @@ response_write(struct selector_key *key) {
     enum http_state ret = RESPONSE;
 
     buffer *b = d->wb;
+
     uint8_t *ptr;
     size_t count;
     ssize_t n;
@@ -1107,9 +1105,9 @@ response_write(struct selector_key *key) {
 //            if (d->response_parser.state != response_done) {
 
             selector_status ss = SELECTOR_SUCCESS;
-//                ss |= selector_set_interest_key(key, OP_NOOP);
+            ss |= selector_set_interest_key(key, OP_NOOP);
             ss |= selector_set_interest(key->s, ATTACHMENT(key)->origin_fd, OP_READ);
-//            ss |= selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_READ);
+//            ss |= selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_WRITE);
 //            ret = ss == SELECTOR_SUCCESS ? COPY : ERROR;
 //            } else {
 
@@ -1117,6 +1115,11 @@ response_write(struct selector_key *key) {
 //                ret = DONE;
 //            }
 
+        } else{
+            selector_status ss = SELECTOR_SUCCESS;
+            ss |= selector_set_interest_key(key, OP_NOOP);
+            //ss |= selector_set_interest(key->s, ATTACHMENT(key)->origin_fd, OP_READ);
+            ss |= selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_WRITE);
         }
     }
 
