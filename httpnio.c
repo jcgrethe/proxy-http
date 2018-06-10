@@ -1032,10 +1032,9 @@ response_read(struct selector_key *key) {
                 if (n >= d->response_parser.response->content_length) {
                     // Last-chunk
                     write_buffer_string(d->wb, "0\r\n");
-
                     // Last CRLF
                     write_buffer_string(d->wb, "\r\n");
-
+                    d->response_parser.response->content_length=0;
                 } else {
                     d->response_parser.response->content_length = d->response_parser.response->content_length - n;
                     selector_status ss = SELECTOR_SUCCESS;
@@ -1103,7 +1102,8 @@ response_write(struct selector_key *key) {
 
         if (!buffer_can_read(b)) {
 //            if (d->response_parser.state != response_done) {
-
+            if (d->response_parser.response->content_length==0)
+                return DONE;
             selector_status ss = SELECTOR_SUCCESS;
             ss |= selector_set_interest_key(key, OP_NOOP);
             ss |= selector_set_interest(key->s, ATTACHMENT(key)->origin_fd, OP_READ);
