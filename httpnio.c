@@ -959,7 +959,6 @@ copy_w(struct selector_key *key) {
     size_t count;
     ssize_t n;
 
-    ptr = buffer_read_ptr(b, &count);
     n = send(key->fd, ptr, count, MSG_NOSIGNAL);
     buffer_read_adv(b, n);
     if (n == -1) {

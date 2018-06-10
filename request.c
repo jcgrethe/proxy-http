@@ -315,6 +315,7 @@ header_field_name(const uint8_t c, struct request_parser *p, buffer *b) {
 
     // If CRLF is found, headers field are over and this is the Empty Line.
     if (strlen(p->header_field_name) == 0 && c == '\r') {
+        write_buffer_string(b,"X-Proxy-PDC-2018: True\r\n");
         return request_empty_line_waiting_for_LF;
     }
 
@@ -335,7 +336,9 @@ header_field_name(const uint8_t c, struct request_parser *p, buffer *b) {
         p->i++;
 
         char *aux = strtolower(p->header_field_name, p->i);
-
+        if(strcmp(aux,"x-proxy-pdc-2018")== 0){
+            return request_error;
+        }
         if (strcmp(aux, "host") == 0) {
             p->i = 0;
             write_buffer_string(b, p->header_field_name);
