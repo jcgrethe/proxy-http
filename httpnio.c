@@ -524,7 +524,7 @@ request_read(struct selector_key *key) {
 //                selector_set_interest(key->s, *d->client_fd, OP_READ);
 //                selector_set_interest(key->s, *d->origin_fd, OP_NOOP);
 
-            } else if (st = request_error_unsupported_method) {
+            } else if (st == request_error_unsupported_method) {
                 return request_process(key, d);
             }
 
@@ -785,6 +785,7 @@ request_connecting(struct selector_key *key) {
 
 
     selector_status s = 0;
+    s |= selector_set_interest_key(key, OP_NOOP);
     s |= selector_set_interest(key->s, *d->origin_fd, OP_WRITE);
     return SELECTOR_SUCCESS == s ? REQUEST_WRITE : ERROR;
 }
@@ -816,13 +817,17 @@ request_write(struct selector_key *key) {
 
         if (!buffer_can_read(b)) {
             if (d->status == status_succeeded) {
-//                ret = RESPONSE;
+                ret = RESPONSE;
 //                selector_set_interest(key->s, *d->client_fd, OP_NOOP);
 //                selector_set_interest(key->s, *d->origin_fd, OP_READ);
 
-                ret = COPY;
-                selector_set_interest(key->s, *d->client_fd, OP_READ);
-                selector_set_interest(key->s, *d->origin_fd, OP_READ);
+                selector_set_interest_key(key, OP_READ);
+
+//                ret = COPY;
+//                selector_set_interest(key->s, *d->client_fd, OP_READ);
+               // selector_set_interest_key(key, OP_NOOP);
+               // selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_READ);
+//                selector_set_interest(key->s, *d->origin_fd, OP_READ);
             } else {
                 ret = DONE;
                 selector_set_interest(key->s, *d->client_fd, OP_NOOP);
@@ -900,7 +905,7 @@ copy_r(struct selector_key *key) {
 
     assert(*d->fd == key->fd);
 
-    if(*d->fd == ATTACHMENT(key)->origin_fd) {
+    if (*d->fd == ATTACHMENT(key)->origin_fd) {
         selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_NOOP);
         return RESPONSE;
 
@@ -928,7 +933,6 @@ copy_r(struct selector_key *key) {
 //        }
     } else {
         buffer_write_adv(b, n);
-
 
 
     }
@@ -1139,16 +1143,14 @@ response_init(const unsigned state, struct selector_key *key) {
     d->rb = &ATTACHMENT(key)->response_read_buffer;
     d->wb = &ATTACHMENT(key)->response_write_buffer;
 
-//    // desencolo una request
-//    set_request(d, queue_remove(ATTACHMENT(key)->session.request_queue));
 
-        if(!d->response_parser_initialized) {
-            response_parser_init(&d->response_parser);
-            d->response_parser_initialized = true;
-        } else {
+    if (!d->response_parser_initialized) {
+        response_parser_init(&d->response_parser);
+        d->response_parser_initialized = true;
+    } else {
 
-            d->response_parser.state = ATTACHMENT(key)->orig.aux_response_state;
-        }
+        d->response_parser.state = ATTACHMENT(key)->orig.aux_response_state;
+    }
 
 }
 
@@ -1209,7 +1211,7 @@ response_read(struct selector_key *key) {
                 write_buffer_string(d->wb, b->read);
                 write_buffer_string(d->wb, "\r\n");
 
-                if(n >= d->response_parser.response->content_length) {
+                if (n >= d->response_parser.response->content_length) {
                     // Last-chunk
                     write_buffer_string(d->wb, "0\r\n");
 
@@ -1280,11 +1282,11 @@ response_write(struct selector_key *key) {
         if (!buffer_can_read(b)) {
 //            if (d->response_parser.state != response_done) {
 
-                selector_status ss = SELECTOR_SUCCESS;
+            selector_status ss = SELECTOR_SUCCESS;
 //                ss |= selector_set_interest_key(key, OP_NOOP);
-                ss |= selector_set_interest(key->s, ATTACHMENT(key)->origin_fd, OP_READ);
-                ss |= selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_READ);
-                ret = ss == SELECTOR_SUCCESS ? COPY : ERROR;
+            ss |= selector_set_interest(key->s, ATTACHMENT(key)->origin_fd, OP_READ);
+            ss |= selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_READ);
+            ret = ss == SELECTOR_SUCCESS ? COPY : ERROR;
 //            } else {
 
 //                ret = response_process(key, d);

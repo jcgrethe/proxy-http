@@ -56,13 +56,12 @@ enum request_state {
     request_waiting_for_LF,
     request_empty_line_waiting_for_LF,
     request_no_empty_host,
-    request_connection,
-    request_consume_string,
     request_dstaddr_fqdn,
     request_dstaddr,
     request_dstport,
-    request_last_crlf,
     LF_end,
+    request_ignore_header,
+
     // apartir de aca están done
             request_done,
 
@@ -72,7 +71,6 @@ enum request_state {
     request_error_unsupported_http_version,
     request_error_unsupported_version,
     request_error_too_long_request_target,
-    request_error_CRLF_not_found,
 
 };
 
