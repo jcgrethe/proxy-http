@@ -12,20 +12,7 @@
 #include "request.h"
 
 //////////////////////////////////////////////////////////////////////////////
-struct parser_definition d; //For recieving byte to byte.
 
-static enum request_state
-LF(const uint8_t c, struct request_parser *p) {
-
-
-    if (c == '\n') {
-
-        return request_done;
-
-    }
-
-    return request_error;
-}
 static enum request_state
 method(const uint8_t c, struct request_parser *p) {
     enum request_state next;
@@ -36,15 +23,15 @@ method(const uint8_t c, struct request_parser *p) {
 
         switch (c) {
             case 'G':
-                d = parser_utils_strcmpi("GET");
+                p->d = parser_utils_strcmpi("GET");
                 p->request->method = http_method_GET;
                 break;
             case 'H':
-                d = parser_utils_strcmpi("HEAD");
+                p->d = parser_utils_strcmpi("HEAD");
                 p->request->method = http_method_HEAD;
                 break;
             case 'P':
-                d = parser_utils_strcmpi("POST");
+                p->d = parser_utils_strcmpi("POST");
                 p->request->method = http_method_POST;
                 break;
             default:
@@ -53,9 +40,9 @@ method(const uint8_t c, struct request_parser *p) {
         }
 
         if (p->state != request_error_unsupported_method) {
-            p->http_sub_parser = parser_init(parser_no_classes(), &d);
+            p->http_sub_parser = parser_init(parser_no_classes(), &p->d);
         } else {
-            return p->state = next;
+            return request_error;
         }
     }
 
@@ -160,37 +147,7 @@ int retrieveHostAndPort(struct request *req, char *URI_reference) {
     return ret;
 }
 
-//int parseIPV4Address(char *URI_reference) {
-//    regex_t regex;
-//    int reti;
-//    char msgbuf[100];
-//    int ret;
-//
-///* Compile regular expression */
-//    reti = regcomp(&regex, "^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$", REG_EXTENDED);
-//    if (reti) {
-//        fprintf(stderr, "Could not compile regex\n");
-//        exit(1);
-//    }
-//
-///* Execute regular expression */
-//    reti = regexec(&regex, URI_reference, 0, NULL, 0);
-//    if (!reti) {
-//        ret = 0;
-//    }
-//    else if (reti == REG_NOMATCH) {
-//        ret = 1;
-//    }
-//    else {
-//        regerror(reti, &regex, msgbuf, sizeof(msgbuf));
-//        fprintf(stderr, "Regex match failed: %s\n", msgbuf);
-//        exit(1);
-//    }
-//
-///* Free memory allocated to the pattern buffer by regcomp() */
-//    regfree(&regex);
-//    return ret;
-//}
+
 
 // Based on 5.3.2. absolute-form of RFC 7230
 // Accumulate request target upto single space.
@@ -234,8 +191,8 @@ HTTP_version(const uint8_t c, struct request_parser *p) {
 
     // The parser should be NULL after method sub parser destruction.
     if (p->http_sub_parser == NULL) {
-        d = parser_utils_strcmpi("HTTP/1.1");
-        p->http_sub_parser = parser_init(parser_no_classes(), &d);
+        p->d = parser_utils_strcmpi("HTTP/1.1");
+        p->http_sub_parser = parser_init(parser_no_classes(), &p->d);
     }
 
     switch (parser_feed(p->http_sub_parser, c)->type) {
@@ -732,70 +689,3 @@ request_close(struct request_parser *p) {
 }
 
 
-// enum response_status
-// cmd_resolve(struct request* request,  struct sockaddr **originaddr,
-//             socklen_t *originlen, int *domain) {
-//     enum response_status ret = status_general_SOCKS_server_failure;
-//
-//     *domain                  = AF_INET;
-//     struct sockaddr *addr    = 0x00;
-//     socklen_t        addrlen = 0;
-//
-//     switch (request->dest_addr_type) {
-//         case socks_req_addrtype_domain: {
-//             struct hostent *hp = gethostbyname(request->dest_addr.fqdn);
-//             if (hp == 0) {
-//                 memset(&request->dest_addr, 0x00,
-//                                        sizeof(request->dest_addr));
-//                 break;
-//             }
-//             request->dest_addr.ipv4.sin_family = hp->h_addrtype;
-//             memcpy((char *)&request->dest_addr.ipv4.sin_addr,
-//                    *hp->h_addr_list, hp->h_length);
-//
-//         }
-//         /* no break */
-//         case socks_req_addrtype_ipv4:
-//             *domain  = AF_INET;
-//             addr    = (struct sockaddr *)&(request->dest_addr.ipv4);
-//             addrlen = sizeof(request->dest_addr.ipv4);
-//             request->dest_addr.ipv4.sin_port = request->dest_port;
-//             break;
-//         case socks_req_addrtype_ipv6:
-//             *domain  = AF_INET6;
-//             addr    = (struct sockaddr *)&(request->dest_addr.ipv6);
-//             addrlen = sizeof(request->dest_addr.ipv6);
-//             request->dest_addr.ipv6.sin6_port = request->dest_port;
-//             break;
-//         default:
-//             return status_address_type_not_supported;
-//     }
-//
-//     *originaddr = addr;
-//     *originlen  = addrlen;
-//
-//     return ret;
-// }
-
-//enum response_status
-//errno_to_socks(const int e) {
-//    enum response_status ret = status_general_SOCKS_server_failure;
-//    switch (e) {
-//        case 0:
-//            ret = status_succeeded;
-//            break;
-//        case ECONNREFUSED:
-//            ret = status_connection_refused;
-//            break;
-//        case EHOSTUNREACH:
-//            ret = status_host_unreachable;
-//            break;
-//        case ENETUNREACH:
-//            ret = status_network_unreachable;
-//            break;
-//        case ETIMEDOUT:
-//            ret = status_ttl_expired;
-//            break;
-//    }
-//    return ret;
-//}

@@ -91,6 +91,7 @@ struct request_parser {
     struct parser *http_sub_parser;
 
     int host_field_value_complete;
+    struct parser_definition d; //For recieving byte to byte.
 
     int value_len;
 };
