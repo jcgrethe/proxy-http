@@ -221,6 +221,7 @@ struct transformation {
     double read_bytes_remaining;
     bool done;
     double client_remaining;
+    size_t send_to_son;
 };
 
 /*
@@ -1025,8 +1026,6 @@ response_read(struct selector_key *key) {
 
                     uint8_t *ptr;
                     size_t count;
-                    ssize_t n;
-
                     ptr = buffer_read_ptr(d->wb, &count);
                     n = send(ATTACHMENT(key)->client_fd, ptr, count, MSG_NOSIGNAL);
 
@@ -1234,13 +1233,13 @@ transformation_init(const unsigned state, struct selector_key *key) {
     buffer_read_ptr(b2, &count2);
     t->content_length = ATTACHMENT(key)->content_length-count2;
     t->client_remaining=ATTACHMENT(key)->content_length;
-
+    t->send_to_son=count2;
     t->did_write = false;
     t->write_error = false;
 
     t->send_bytes_write = 0;
     t->send_bytes_read = 0;
-
+    printf("initial lenght:%lf\n",t->content_length);
     t->status = start_transformation(key);
 
     buffer *b = t->wb;
@@ -1264,7 +1263,7 @@ transformation_read(struct selector_key *key) {
     struct transformation *t = &ATTACHMENT(key)->t;
     enum http_state ret = TRANSFORMATION;
 
-    buffer *b = t->rb;
+    buffer *b = t->transf_wb;
     uint8_t *ptr;
     size_t count;
     ssize_t n;
@@ -1272,6 +1271,7 @@ transformation_read(struct selector_key *key) {
     ptr = buffer_write_ptr(b, &count);
     n = recv(*t->origin_fd, ptr, count, 0);
     t->content_length-=n;
+    printf("Origin Receive: %d\n",n);
     if (n > 0) {
         buffer_write_adv(b, n);
 
@@ -1319,22 +1319,24 @@ transformation_write(struct selector_key *key) {
     send(*et->client_fd, chunk_size, strlen(chunk_size), MSG_NOSIGNAL);
     n = send(*et->client_fd, ptr, bytes_sent, MSG_NOSIGNAL);
     send(*et->client_fd, "\r\n", 2, MSG_NOSIGNAL);
-
     if (n >= 0) {
         buffer_read_adv(b, n);
         if(et->read_bytes_remaining>0){
             selector_set_interest(key->s, *et->transf_write_fd, OP_WRITE);
             selector_set_interest(key->s, *et->client_fd, OP_NOOP);
+            return ret;
         } else {
             if (et->content_length > 0) {
                 selector_set_interest(key->s, *et->transf_write_fd, OP_NOOP);
                 selector_set_interest(key->s, *et->origin_fd, OP_READ);
                 selector_set_interest(key->s, *et->client_fd, OP_NOOP);
+                return ret;
             } else if (et->client_remaining!=0) {
-                selector_set_interest(key->s, *et->transf_write_fd, OP_NOOP);
+                //selector_set_interest(key->s, *et->transf_write_fd, OP_NOOP);
                 selector_set_interest(key->s, *et->origin_fd, OP_NOOP);
                 selector_set_interest(key->s, *et->client_fd, OP_NOOP);
                 selector_set_interest(key->s, *et->transf_read_fd, OP_READ);
+                return ret;
             } else{
                 return DONE;
             }
@@ -1381,7 +1383,7 @@ void transf_read(struct selector_key *key) {
     } else if (n > 0) {
         buffer_write_adv(b, n);
         selector_set_interest(key->s, *t->client_fd, OP_WRITE);
-        selector_set_interest(key->s, *t->transf_write_fd, OP_NOOP);
+       // selector_set_interest(key->s, *t->transf_write_fd, OP_NOOP);
     }
 
 }
