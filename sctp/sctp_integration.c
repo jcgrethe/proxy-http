@@ -52,6 +52,7 @@ void clean(uint8_t * buf);
 
 static void sigpipe_handler();
 
+
 // Global variables for handling SIPIPE property.
 struct selector_key * current_key;
 int current_client;
@@ -244,10 +245,6 @@ int handle_request(struct sctp_data *data){
                     handle_config(data);
                     break;
 
-              case 3: //sys
-                    handle_sys(data);
-                    break;
-
               default: // bad request
                     handle_badrequest(data);
                     break;
@@ -339,69 +336,12 @@ void handle_metric(struct sctp_data * data){
 
 void handle_config(struct sctp_data * data){
     clean(data->datagram.message);
-    if(data->datagram.argsq == 0){
-        // Return all current configurations
-        //data->datagram.message[] = ;
-        //data->datagram.message[] = ;
+    if(data->datagram.argsq == 0 && data->datagram.command == 0 && data->datagram.code == 0){
         data->datagram.code = 1;
-        data->datagram.argsq == 2;
-    }else if(data->datagram.argsq == 1){
-        // Return
-        switch (data->datagram.command){
-            case 0:
-                //strcpy(data->datagram.message, "currcon = 5\n");
-                data->datagram.code = 1;
-                break;
-            case 1:
-                //strcpy(data->datagram.message, "buffsize = 5\n");
-                data->datagram.code = 1;
-                break;
-            case 2:
-                //strcpy(data->datagram.message, "timeout = 5\n");
-                data->datagram.code = 1;
-                break;
-            default:
-                data->datagram.argsq = 0;
-                data->datagram.code = 4;
-        }
-    }else if(data->datagram.argsq == 2){
-        switch (data->datagram.command){
-            case 0: //Set currconn value (data->datagram.message)
-                if(1){  //Setted right
-                    strcpy(data->datagram.message, "New currconn config setted.\n");
-                    data->datagram.code = 1;
-                }
-                break;
-            case 1: //Set buffsize value
-                if(1){  //Setted right
-                    strcpy(data->datagram.message, "New buffsize config setted.\n");
-                    data->datagram.code = 1;
-                }
-                break;
-            case 2: //Set timeout value
-                if(1){  //Setted right
-                    strcpy(data->datagram.message, "New timeout config setted.\n");
-                    data->datagram.code = 1;
-                }
-                break;
-            default:
-                strcpy(data->datagram.message, "Invalid configuration.\n");
-                data->datagram.code = 4;
-        }
+        change_transformation();
     }else{
         strcpy(data->datagram.message, "Invalid config arguments.\n");
         data->datagram.code = 4;
-    }
-}
-
-void handle_sys(struct sctp_data * data){
-    if(data->datagram.command == 0){        //Help
-        strcpy(data->datagram.message, "Commands available:\n-help\n-metric [metric name]\n-config [config name] [config value]\n-exit\n");
-        data->datagram.code = 1;
-    } else if(data->datagram.command == 2){ //Exit
-        strcpy(data->datagram.message, "Bye!\n");
-        data->datagram.code = 1;
-        //Closing socket managed after sending ok
     }
 }
 
@@ -414,5 +354,9 @@ void clean(uint8_t * buf){
     for(int i = 0; i < MAX_DATAGRAM_MESSAGE; i++){
         buf[i] = 0;
     }
+}
+
+void change_transformation(){
+    transformation_mode = !transformation_mode;
 }
 

@@ -8,6 +8,7 @@
 #define MAX_DATAGRAM_MESSAGE    8 * 120
 
 void sctp_passive_accept(struct selector_key *key);
+void change_transformation();
 
 struct datagram_struct{
 	uint8_t type;

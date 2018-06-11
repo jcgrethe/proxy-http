@@ -158,11 +158,7 @@ int main(int argc, char * argv[]) {
             continue;
           }
         } else if (strcmp(first, "config") == 0) {
-          if (!handleConfig(second, third, connSock)) {
-            continue;
-          }
-        } else if (strcmp(first, "help") == 0) {
-          if (!handleHelp(second, third, connSock)) {
+          if (!handleConfig(second, connSock)) {
             continue;
           }
         } else if (strcmp(first, "exit") == 0) {

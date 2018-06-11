@@ -36,9 +36,10 @@
 
 static bool done = false;
 
-/* Global metrics structures. */
+/* Global metrics structures & configs. */
 metrics metrstr;
 tfbyte tf;
+bool transformation_mode = true;
 
 static void
 sigterm_handler(const int signal) {

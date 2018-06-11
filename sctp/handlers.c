@@ -107,30 +107,17 @@ int handleMetric(char * second, char * third, int connSock){
   return 0;     
 }
 
-int handleConfig(char * second, char * third, int connSock){
+int handleConfig(char * second, int connSock){
   char type = 2, command = 0, argsq = 0, code = 0, ret, lenght = 4;
   uint8_t datagram[MAX_DATAGRAM];
   
-  if(!second[0] && !third[0]){
-    argsq = 0;
+  if(strcmp(second, "transform") == 0){
+    command = 0;
   }else{
-    argsq = 1;
-    if(strcmp(second, "currcon") == 0){
-      command = 0;
-    }else if(strcmp(second, "buffsize") == 0){
-      command = 1;
-    }else if(strcmp(second, "timeout") == 0){
-      command = 2;
-    }else{
-      printf(ECOLOR EPREFIX " Invalid config. " ESUFIX RESETCOLOR"\n");
-      return 0;
-    }    
-    if (third[0]){
-      argsq = 2;
-      memcpy(&datagram[4], third, strlen(third));
-      lenght = lenght + strlen(third);
-    }
-  }
+    printf(ECOLOR EPREFIX " Invalid config. " ESUFIX RESETCOLOR"\n");
+    return 0;
+  }    
+  
   datagram[0] = type;
   datagram[1] = command;
   datagram[2] = argsq;

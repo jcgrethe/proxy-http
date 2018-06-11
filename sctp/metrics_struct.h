@@ -1,4 +1,6 @@
 #ifndef METRICS_STRUCT_H
+
+	#include <stdbool.h>
 	
 	#define METRICS_STRUCT_H
 	#define INSTANCES	1
@@ -22,5 +24,7 @@
 
 	typedef struct metric * metrics;
 	extern metrics metrstr;
+
+	extern bool transformation_mode;
 
 #endif 
