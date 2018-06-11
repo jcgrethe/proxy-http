@@ -17,6 +17,7 @@ MAIN=main.c
 BUFFER=buffer.c
 NETUTILS=netutils.c
 REQUEST=request.c
+RESPONSE=response.c
 SELECTOR=selector.c
 HTTP=http.c
 HTTP_NIO=httpnio.c
@@ -35,7 +36,7 @@ all: $(PROXY_OUT)
 
 $(PROXY_OUT):
 	@echo "[Compiling...]"
-	@$(CC) -pthread  $(FSANITIZE) $(FLAGS) $(MAIN) $(BUFFER) $(NETUTILS) $(PARSER) $(PARSER_UTILS) $(REQUEST) $(SELECTOR) $(HTTP) $(HTTP_NIO) $(STM) $(SCTP_HANDLERS) $(PARAMETERS) $(MEDIA_TYPES) -o $(PROXY_OUT)
+	@$(CC) -pthread  $(FSANITIZE) $(FLAGS) $(MAIN) $(BUFFER) $(NETUTILS) $(PARSER) $(PARSER_UTILS) $(REQUEST) $(RESPONSE) $(SELECTOR) $(HTTP) $(HTTP_NIO) $(STM) $(SCTP_HANDLERS) $(PARAMETERS) $(MEDIA_TYPES) -o $(PROXY_OUT)
 	@$(CC) -pthread sctp/sctpclnt.c sctp/handlers.c -L/usr/local/lib -lsctp -o sctpclnt
 	@echo "[Finished]"
 

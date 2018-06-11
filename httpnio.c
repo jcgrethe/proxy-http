@@ -1014,39 +1014,49 @@ response_read(struct selector_key *key) {
         enum response_state st = response_consume(b, &d->response_parser, &error, d->wb, &n);
         if (st == response_done) {
 
-            if (d->response_parser.response->status_code == 200
+            if (strcmp(parameters->command, DEFAULT_COMMAND) != 0 &&
+                strcmp(parameters->media_types_input, DEFAULT_MEDIA_TYPES_RANGES) != 0){
+
+                if (d->response_parser.response->status_code == 200
                 && d->response_parser.response->method != http_method_HEAD) {
 
-                if (validate_media_type(d->response_parser.content_type_medias, parameters->mts)) {
 
-                    uint8_t *ptr;
-                    size_t count;
-                    ssize_t n;
+                uint8_t *ptr;
+                size_t count;
+                ssize_t n;
 
-                    ptr = buffer_read_ptr(d->wb, &count);
-                    n = send(ATTACHMENT(key)->client_fd, ptr, count, MSG_NOSIGNAL);
+                ptr = buffer_read_ptr(d->wb, &count);
+                n = send(ATTACHMENT(key)->client_fd, ptr, count, MSG_NOSIGNAL);
 
-                    if (d->response_parser.response->transfer_enconding_chunked) {
+                if (d->response_parser.response->transfer_enconding_chunked) {
 
-                        ATTACHMENT(key)->chunk_activated = true;
+                    ATTACHMENT(key)->chunk_activated = true;
 
-                    } else {
+                } else {
 
-                        if (d->response_parser.response->content_length_present) {
+                    if (d->response_parser.response->content_length_present) {
 
-                            ATTACHMENT(key)->content_length = d->response_parser.response->content_length;
-
-                        }
+                        ATTACHMENT(key)->content_length = d->response_parser.response->content_length;
 
                     }
 
-                    selector_status ss = SELECTOR_SUCCESS;
-                    ss |= selector_set_interest_key(key, OP_NOOP);
-                    ss |= selector_set_interest(key->s, ATTACHMENT(key)->origin_fd, OP_NOOP);
-
-                    return ss == SELECTOR_SUCCESS ? TRANSFORMATION : ERROR;
                 }
 
+                selector_status ss = SELECTOR_SUCCESS;
+                ss |= selector_set_interest_key(key, OP_NOOP);
+                ss |= selector_set_interest(key->s, ATTACHMENT(key)->origin_fd, OP_NOOP);
+
+                // If transformation is on, validate parameters and transform
+                  if (validate_media_type(d->response_parser.content_type_medias, parameters->mts)) {
+                        return ss == SELECTOR_SUCCESS ? TRANSFORMATION : ERROR;
+                    } else {
+                        printf("Doesnt Match Media Types!");
+                    }
+
+
+//                return ss == SELECTOR_SUCCESS ? TRANSFORMATION : ERROR;
+//
+                }
             }
 
 

@@ -14,6 +14,7 @@
 #define LOCALHOST "127.0.0.1"
 #define LISTENING_ADDRESS "0.0.0.0"
 #define DEFAULT_MEDIA_TYPES_RANGES ""
+#define DEFAULT_COMMAND ""
 
 struct options_struct {
     /* Connection Settings */
