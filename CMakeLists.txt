@@ -32,6 +32,8 @@ add_executable(v2
         http_codes.h
         parameters.c
         parameters.h
+        response.c
+        response.h
         media_types.c
         media_types.h
         )

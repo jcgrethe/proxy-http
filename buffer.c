@@ -113,3 +113,9 @@ write_buffer_string(buffer *b, const char * pString){
     }
 
 }
+void
+write_buffer_buffer(buffer *b, buffer * b2){
+    while (buffer_can_read(b2)){
+        buffer_write(b,buffer_read(b2));
+    }
+}
