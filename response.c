@@ -481,8 +481,6 @@ response_parser_feed(struct response_parser *p, const uint8_t c, buffer *accum) 
             next = response_error;
             break;
     }
-
-    printf("Now: %d, next: %d\n", p->state, next);
     return p->state = next;
 }
 

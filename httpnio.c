@@ -1386,6 +1386,7 @@ transformation_close(const unsigned state, struct selector_key *key) {
 ////////////////////////////////////////////////////////////////////////////////
 
 void transf_read(struct selector_key *key) {
+    printf("transf read\n");
     struct transformation *t = &ATTACHMENT(key)->t;
 
     buffer *b = t->transf_rb;
@@ -1396,6 +1397,7 @@ void transf_read(struct selector_key *key) {
     ptr = buffer_write_ptr(b, &count);
     n = read(*t->transf_read_fd, ptr, count);
 
+    printf("transf read n: %d\n", n);
     if (n < 0) {
         selector_unregister_fd(key->s, key->fd);
         t->error_wr = true;
@@ -1411,6 +1413,7 @@ void transf_read(struct selector_key *key) {
 }
 
 void transf_write(struct selector_key *key) {
+    printf("transf writte\n");
     struct transformation *t = &ATTACHMENT(key)->t;
 
     buffer *b = t->transf_wb;
@@ -1426,6 +1429,7 @@ void transf_write(struct selector_key *key) {
 //    }
 
     n = write(*t->transf_write_fd, ptr, bytes_sent);
+    printf("transf writte n: %d\n", n);
 
     if (n > 0) {
 //        if (t->send_bytes_read != 0)
@@ -1451,7 +1455,7 @@ void transf_write(struct selector_key *key) {
 
         }
 
-    } else if (n == -1) {
+    } else if (n == -1 || n == 0) {
         t->status = transf_status_err;
 
 //        if (t->send_bytes_read == 0) {
@@ -1467,6 +1471,7 @@ void transf_write(struct selector_key *key) {
 }
 
 void transf_close(struct selector_key *key) {
+    printf("transf close\n");
     close(key->fd);
 }
 
