@@ -39,7 +39,7 @@ static bool done = false;
 /* Global metrics structures & configs. */
 metrics metrstr;
 tfbyte tf;
-bool transformation_mode = true;
+bool transformation_mode = false;
 
 static void
 sigterm_handler(const int signal) {
