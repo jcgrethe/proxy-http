@@ -12,6 +12,7 @@
 #include "response.h"
 
 //////////////////////////////////////////////////////////////////////////////
+struct parser_definition d;
 
 static enum response_state
 HTTP_version(const uint8_t c, struct response_parser *p) {
@@ -19,7 +20,7 @@ HTTP_version(const uint8_t c, struct response_parser *p) {
 
     // The parser should be NULL after method sub parser destruction.
     if (p->http_sub_parser == NULL) {
-        struct parser_definition d = parser_utils_strcmpi("HTTP/1.1"); //TODO
+        d = parser_utils_strcmpi("HTTP/1.1"); //TODO
         p->http_sub_parser = parser_init(parser_no_classes(), &d);
     }
 
@@ -175,7 +176,7 @@ parse_transfer_encoding(const uint8_t c, struct response_parser *p) {
     }
 
     if (p->http_sub_parser == NULL) {
-        struct parser_definition d = parser_utils_strcmpi("chunked"); //TODO
+        d = parser_utils_strcmpi("chunked"); //TODO
         p->http_sub_parser = parser_init(parser_no_classes(), &d);
     }
 
