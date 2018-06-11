@@ -219,6 +219,8 @@ struct transformation {
     bool chunked_activated;
     double content_length;
     double read_bytes_remaining;
+    bool done;
+    double client_remaining;
 };
 
 /*
@@ -1018,36 +1020,36 @@ response_read(struct selector_key *key) {
                 strcmp(parameters->media_types_input, DEFAULT_MEDIA_TYPES_RANGES) != 0){
 
                 if (d->response_parser.response->status_code == 200
-                && d->response_parser.response->method != http_method_HEAD) {
+                    && d->response_parser.response->method != http_method_HEAD) {
 
 
-                uint8_t *ptr;
-                size_t count;
-                ssize_t n;
+                    uint8_t *ptr;
+                    size_t count;
+                    ssize_t n;
 
-                ptr = buffer_read_ptr(d->wb, &count);
-                n = send(ATTACHMENT(key)->client_fd, ptr, count, MSG_NOSIGNAL);
+                    ptr = buffer_read_ptr(d->wb, &count);
+                    n = send(ATTACHMENT(key)->client_fd, ptr, count, MSG_NOSIGNAL);
 
-                if (d->response_parser.response->transfer_enconding_chunked) {
+                    if (d->response_parser.response->transfer_enconding_chunked) {
 
-                    ATTACHMENT(key)->chunk_activated = true;
+                        ATTACHMENT(key)->chunk_activated = true;
 
-                } else {
+                    } else {
 
-                    if (d->response_parser.response->content_length_present) {
+                        if (d->response_parser.response->content_length_present) {
 
-                        ATTACHMENT(key)->content_length = d->response_parser.response->content_length;
+                            ATTACHMENT(key)->content_length = d->response_parser.response->content_length;
+
+                        }
 
                     }
 
-                }
+                    selector_status ss = SELECTOR_SUCCESS;
+                    ss |= selector_set_interest_key(key, OP_NOOP);
+                    ss |= selector_set_interest(key->s, ATTACHMENT(key)->origin_fd, OP_NOOP);
 
-                selector_status ss = SELECTOR_SUCCESS;
-                ss |= selector_set_interest_key(key, OP_NOOP);
-                ss |= selector_set_interest(key->s, ATTACHMENT(key)->origin_fd, OP_NOOP);
-
-                // If transformation is on, validate parameters and transform
-                  if (validate_media_type(d->response_parser.content_type_medias, parameters->mts)) {
+                    // If transformation is on, validate parameters and transform
+                    if (validate_media_type(d->response_parser.content_type_medias, parameters->mts)) {
                         return ss == SELECTOR_SUCCESS ? TRANSFORMATION : ERROR;
                     } else {
                         printf("Doesnt Match Media Types!");
@@ -1226,9 +1228,12 @@ transformation_init(const unsigned state, struct selector_key *key) {
     t->error_rd = false;
 
     t->chunked_activated = ATTACHMENT(key)->chunk_activated;
-    t->content_length = ATTACHMENT(key)->content_length;
-
-    t->read_bytes_remaining = t->content_length;
+    t->done=false;
+    buffer *b2 = t->rb;
+    size_t count2;
+    buffer_read_ptr(b2, &count2);
+    t->content_length = ATTACHMENT(key)->content_length-count2;
+    t->client_remaining=ATTACHMENT(key)->content_length;
 
     t->did_write = false;
     t->write_error = false;
@@ -1266,14 +1271,14 @@ transformation_read(struct selector_key *key) {
 
     ptr = buffer_write_ptr(b, &count);
     n = recv(*t->origin_fd, ptr, count, 0);
-
+    t->content_length-=n;
     if (n > 0) {
         buffer_write_adv(b, n);
 
 
         if (!t->chunked_activated) {
 
-            t->read_bytes_remaining = t->read_bytes_remaining - n;
+//            t->read_bytes_remaining = t->read_bytes_remaining - n;
 
         } else {
 
@@ -1296,7 +1301,9 @@ static unsigned
 transformation_write(struct selector_key *key) {
     struct transformation *et = &ATTACHMENT(key)->t;
     enum http_state ret = TRANSFORMATION;
-
+    if(et->done){
+        return DONE;
+    }
     buffer *b = et->wb;
     uint8_t *ptr;
     size_t count;
@@ -1305,66 +1312,33 @@ transformation_write(struct selector_key *key) {
     ptr = buffer_read_ptr(b, &count);
     size_t bytes_sent = count;
 
-    if (et->send_bytes_write != 0) {
-        bytes_sent = et->send_bytes_write;
-    }
 
     char chunk_size[12] = {0};
     sprintf(chunk_size, "%X\r\n", (unsigned int) bytes_sent);
 
     send(*et->client_fd, chunk_size, strlen(chunk_size), MSG_NOSIGNAL);
-
-//    write_buffer_string(d->wb, chunk_size);
-//    write_buffer_buffer(d->wb, b);
-//    write_buffer_string(d->wb, "\r\n");
-
     n = send(*et->client_fd, ptr, bytes_sent, MSG_NOSIGNAL);
-
-    et->content_length = et->content_length - n;
-
-
     send(*et->client_fd, "\r\n", 2, MSG_NOSIGNAL);
 
-
-    if (et->content_length == 0) {
-
-        // Last-chunk
-        // Last CRLF
-
-        send(*et->client_fd, "0\r\n\r\n", 5, MSG_NOSIGNAL);
-
-        return DONE;
-
-    }
-
-    if (n > 0) {
-
-        if (et->send_bytes_write != 0) {
-            et->send_bytes_write -= n;
-            et->finish_wr = true;
-        }
-
-//        et->did_write = true;
-
+    if (n >= 0) {
         buffer_read_adv(b, n);
-
-//        if (et->finish_wr)
-//            metrics->retrieved_messages++;
-
-        if ((et->error_wr || et->finish_wr) && et->send_bytes_write == 0) {
-
-            selector_set_interest(key->s, *et->transf_read_fd, OP_READ);
+        if(et->read_bytes_remaining>0){
+            selector_set_interest(key->s, *et->transf_write_fd, OP_WRITE);
             selector_set_interest(key->s, *et->client_fd, OP_NOOP);
-
         } else {
-
-            if (!et->error_wr) {
-                selector_set_interest(key->s, *et->transf_read_fd, OP_READ);
+            if (et->content_length > 0) {
+                selector_set_interest(key->s, *et->transf_write_fd, OP_NOOP);
+                selector_set_interest(key->s, *et->origin_fd, OP_READ);
                 selector_set_interest(key->s, *et->client_fd, OP_NOOP);
+            } else if (et->client_remaining!=0) {
+                selector_set_interest(key->s, *et->transf_write_fd, OP_NOOP);
+                selector_set_interest(key->s, *et->origin_fd, OP_NOOP);
+                selector_set_interest(key->s, *et->client_fd, OP_NOOP);
+                selector_set_interest(key->s, *et->transf_read_fd, OP_READ);
+            } else{
+                return DONE;
             }
-
         }
-//        metricas->transferred_bytes += n;
     } else if (n == -1) {
         ret = ERROR;
     }
@@ -1374,6 +1348,9 @@ transformation_write(struct selector_key *key) {
 
 static void
 transformation_close(const unsigned state, struct selector_key *key) {
+
+    struct transformation *et = &ATTACHMENT(key)->t;
+    send(*et->client_fd,"0\r\n\r\n", 5, MSG_NOSIGNAL);
     struct transformation *t = &ATTACHMENT(key)->t;
     selector_unregister_fd(key->s, *t->transf_read_fd);
     close(*t->transf_read_fd);
@@ -1386,9 +1363,8 @@ transformation_close(const unsigned state, struct selector_key *key) {
 ////////////////////////////////////////////////////////////////////////////////
 
 void transf_read(struct selector_key *key) {
-    printf("transf read\n");
     struct transformation *t = &ATTACHMENT(key)->t;
-
+    static int aux=0;
     buffer *b = t->transf_rb;
     uint8_t *ptr;
     size_t count;
@@ -1396,74 +1372,38 @@ void transf_read(struct selector_key *key) {
 
     ptr = buffer_write_ptr(b, &count);
     n = read(*t->transf_read_fd, ptr, count);
-
-    printf("transf read n: %d\n", n);
+    aux+=n;
+    t->client_remaining-=n;
+    printf("receive:%d\n",aux);
     if (n < 0) {
-        selector_unregister_fd(key->s, key->fd);
-        t->error_wr = true;
         selector_set_interest(key->s, *t->client_fd, OP_WRITE);
-    } else if (n >= 0) {
+        selector_set_interest(key->s, *t->transf_write_fd, OP_NOOP);
+    } else if (n > 0) {
         buffer_write_adv(b, n);
-
-//        selector_unregister_fd(key->s, key->fd);
-
         selector_set_interest(key->s, *t->client_fd, OP_WRITE);
+        selector_set_interest(key->s, *t->transf_write_fd, OP_NOOP);
     }
 
 }
-
 void transf_write(struct selector_key *key) {
-    printf("transf writte\n");
     struct transformation *t = &ATTACHMENT(key)->t;
-
+    static int a=0;
     buffer *b = t->transf_wb;
     uint8_t *ptr;
     size_t count;
     ssize_t n;
-
     ptr = buffer_read_ptr(b, &count);
     size_t bytes_sent = count;
-
-//    if (t->send_bytes_read != 0) {
-//        bytes_sent = t->send_bytes_read;
-//    }
-
     n = write(*t->transf_write_fd, ptr, bytes_sent);
-    printf("transf writte n: %d\n", n);
-
+    a+=n;
+    printf("send: %d\n",a);
+    t->read_bytes_remaining=count-n;
     if (n > 0) {
-//        if (t->send_bytes_read != 0)
-//            t->send_bytes_read -= n;
-
         buffer_read_adv(b, n);
-
-//        if (t->finish_rd && t->send_bytes_read == 0) {
-//            selector_unregister_fd(key->s, key->fd);
-//        } else {
-//            selector_set_interest(key->s, *t->transf_write_fd, OP_NOOP);
-//            selector_set_interest(key->s, *t->origin_fd, OP_READ);
-//        }
-
-        if(n == count) {
-
-            if(t->read_bytes_remaining != 0 ) {
-
-//                selector_set_interest(key->s, *t->transf_write_fd, OP_NOOP);
-//                selector_set_interest(key->s, *t->origin_fd, OP_READ);
-
-            }
-
-        }
-
+        selector_set_interest(key->s, *t->transf_read_fd, OP_READ);
+        selector_set_interest(key->s, *t->transf_write_fd, OP_NOOP);
     } else if (n == -1 || n == 0) {
         t->status = transf_status_err;
-
-//        if (t->send_bytes_read == 0) {
-//            buffer_reset(b);
-//        } else {
-//            buffer_read_adv(b, t->send_bytes_read);
-//        }
-
         selector_unregister_fd(key->s, key->fd);
         selector_set_interest(key->s, *t->origin_fd, OP_READ);
         t->error_rd = true;
@@ -1489,7 +1429,7 @@ start_transformation(struct selector_key *key) {
     char *args[4];
     args[0] = "bash";
     args[1] = "-c";
-    args[2] = parameters->command;
+    args[2] =parameters->command;
     args[3] = NULL;
 
     int fd_read[2];
@@ -1505,7 +1445,7 @@ start_transformation(struct selector_key *key) {
     if ((pid = fork()) == -1) {
         perror("fork error");
     } else if (pid == 0) {
-
+        printf("Fork\n");
         dup2(fd_write[0], STDIN_FILENO);
         dup2(fd_read[1], STDOUT_FILENO);
 
@@ -1514,17 +1454,21 @@ start_transformation(struct selector_key *key) {
         close(fd_read[0]);
 
         // append/update
-        FILE *f = freopen(parameters->error_file, "a+", stderr);
-        if (f == NULL)
-            exit(-1);
-
-        int value = execve("/bin/bash", args, NULL);
+        //FILE *f = freopen(parameters->error_file, "a+", stderr);
+//        if (f == NULL) {
+//            printf("Fork error\n");
+//            exit(-1);
+//        }
+        int value;
+        value = execve("/bin/bash", args, NULL);
         perror("execve");
+        printf("Fork error 2\n");
         if (value == -1) {
+            printf("Fork error 3\n");
             fprintf(stderr, "Error executing command.\n");
         }
+        exit(0);
     } else {
-
         close(fd_write[0]);
         close(fd_read[1]);
 
