@@ -30,8 +30,10 @@ struct media_types * parse_media_types(char * arg){
     char * firstToken;
     char ** ranges = malloc(MAXQRANGES* sizeof(char *));
     int rangesi = 0;
+    char * aux = malloc(RANGEMAXLENGTH*MAXQRANGES);
+    strcpy(aux, arg);
 
-    firstToken = strtok(arg, &delim);
+    firstToken = strtok(aux, &delim);
     while(firstToken != NULL){
         ranges[rangesi] = malloc(RANGEMAXLENGTH* sizeof(char));
         strcpy(ranges[rangesi++], firstToken);

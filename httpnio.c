@@ -1090,7 +1090,7 @@ response_read(struct selector_key *key) {
 
             if (strcmp(parameters->command, DEFAULT_COMMAND) != 0 &&
                 strcmp(parameters->media_types_input, DEFAULT_MEDIA_TYPES_RANGES) != 0 &&
-                !d->response_parser.response->content_enconding_gzip) {
+                !d->response_parser.response->content_enconding_gzip && validate_media_type(d->response_parser.content_type_medias, parameters->mts) > 0) {
 
                 if (d->response_parser.response->status_code == 200
                     && d->response_parser.response->method != http_method_HEAD) {
@@ -1190,12 +1190,7 @@ response_read(struct selector_key *key) {
                     ss |= selector_set_interest_key(key, OP_NOOP);
                     ss |= selector_set_interest(key->s, ATTACHMENT(key)->origin_fd, OP_NOOP);
 
-                    // If transformation is on, validate parameters and transform
-                    if (validate_media_type(d->response_parser.content_type_medias, parameters->mts)) {
-                        return ss == SELECTOR_SUCCESS ? TRANSFORMATION : ERROR;
-                    } else {
-                        printf("Doesnt Match Media Types!");
-                    }
+                    return ss == SELECTOR_SUCCESS ? TRANSFORMATION : ERROR;
 
                 }
             }
