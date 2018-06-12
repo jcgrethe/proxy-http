@@ -1063,7 +1063,11 @@ response_read(struct selector_key *key) {
 
 
             if (d->response_parser.response->transfer_enconding_chunked) {
-
+                write_buffer_buffer(d->wb, b);
+                selector_status ss = SELECTOR_SUCCESS;
+                ss |= selector_set_interest_key(key, OP_NOOP);
+                ss |= selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_WRITE);
+                return ss == SELECTOR_SUCCESS ? RESPONSE : ERROR;
 
             } else if (d->response_parser.response->content_length_present) {
 
@@ -1145,7 +1149,7 @@ response_write(struct selector_key *key) {
 
         if (!buffer_can_read(b)) {
 //            if (d->response_parser.state != response_done) {
-            if (d->response_parser.response->content_length == 0)
+            if (d->response_parser.response->content_length == 0 && d->response_parser.response->content_length_present)
                 return DONE;
             selector_status ss = SELECTOR_SUCCESS;
             ss |= selector_set_interest_key(key, OP_NOOP);
