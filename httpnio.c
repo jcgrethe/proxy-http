@@ -847,7 +847,17 @@ request_write(struct selector_key *key) {
                     ret = COPY;
 
                     selector_set_interest_key(key, OP_NOOP);
-                    selector_set_interest(key->s, *d->origin_fd, OP_WRITE);
+                    if(buffer_can_read(d->rb)) {
+
+                        selector_set_interest(key->s, *d->origin_fd, OP_WRITE);
+
+                    } else {
+
+                        selector_set_interest(key->s, *d->client_fd, OP_READ);
+
+                    }
+
+
                 }
 //                ret = COPY;
 //                selector_set_interest(key->s, *d->client_fd, OP_READ);
@@ -898,6 +908,7 @@ copy_r(struct selector_key *key) {
     if (n > 0) {
         buffer_write_adv(b, n);
         selector_set_interest(key->s, *d->origin_fd, OP_WRITE);
+        selector_set_interest(key->s, *d->client_fd, OP_NOOP);
     } else {
         return ERROR;
     }
