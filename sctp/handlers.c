@@ -116,12 +116,9 @@ int handleConfig(char * second, char * third, int connSock){
   } else if(strcmp(second, "mediatypes") == 0){
     command = MEDIATYPES;
     argsq = 1;
-    memcpy(&datagram[4], third, thirdLenght);
   } else if(strcmp(second, "command") == 0){
     command = COMM;
     argsq = 1;
-    lenght += thirdLenght;
-    memcpy(&datagram[4], third, thirdLenght);
   } else{
     printf(ECOLOR EPREFIX " Invalid Config. " ESUFIX RESETCOLOR"\n");
     return 0;
@@ -131,8 +128,13 @@ int handleConfig(char * second, char * third, int connSock){
   datagram[1] = command;
   datagram[2] = argsq;
   datagram[3] = code;
+  if (argsq == 1){
+    lenght += thirdLenght;
+    third[thirdLenght-1] = '\0';
+    memcpy(&datagram[4], third, thirdLenght+1);
+  }
 
-  ret = sctp_sendmsg( connSock, (const void *)datagram, lenght + thirdLenght + 1,
+  ret = sctp_sendmsg( connSock, (const void *)datagram, lenght + 1,
                          NULL, 0, 0, 0, STREAM, 0, 0 );
   if(ret > 1){
     return 1;

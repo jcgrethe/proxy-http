@@ -28,8 +28,8 @@
 #include "../styles.h"
 
 
-#define PROXY_SCTP_PORT     1081
-#define DEFAULT_PORT        1081
+#define PROXY_SCTP_PORT     9090
+#define DEFAULT_PORT        9090
 #define DEFAULT_IP          "127.0.0.1"
 
 union ans{
@@ -150,7 +150,8 @@ int main(int argc, char * argv[]) {
           printf(ECOLOR EPREFIX " No characters read " ESUFIX RESETCOLOR"\n");
           break;
         }
-        sscanf(buffer, "%s %s %s[\0]", first, second, third);
+        sscanf(buffer, "%s %s %[\001-\377]", first, second, third);
+        printf(third);
         if (strcmp(first, "metric") == 0) {
           if (!handleMetric(second, third, connSock)) {
             continue;

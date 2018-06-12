@@ -189,6 +189,7 @@ void sctp_write(struct selector_key *key){
 	if (ret>0){
 		printf("Sent.\n");
 	}
+	clean(data->datagram.message);
 	if(data->datagram.type != 3 || data->datagram.command != 2) {
         if (selector_set_interest(key->s, key->fd, OP_READ) != SELECTOR_SUCCESS) {
             selector_unregister_fd(key->s, data->client_fd);
@@ -344,8 +345,12 @@ void handle_config(struct sctp_data * data){
         data->datagram.message[0] = transformation_mode;
     } else if(data->datagram.argsq == 1 && data->datagram.command == MEDIATYPES){
         char * c = malloc(8 * sizeof(data->datagram.message));
-        memcpy(c, data->datagram.message, sizeof(data->datagram.message));
-        parameters->command = c;
+
+        strcpy(c, data->datagram.message);
+
+        parameters->media_types_input = c;
+        printf("%s - %s\n",c, parameters->media_types_input);
+        parameters->mts = parse_media_types(parameters->media_types_input);
         clean(data->datagram.message);
         data->datagram.code = OK;
     } else if(data->datagram.argsq == 1 && data->datagram.command == COMM){
