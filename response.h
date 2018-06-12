@@ -23,6 +23,8 @@ struct response
 
     bool content_length_present;
 
+    bool content_enconding_gzip;
+
     ssize_t content_length;
 };
 
@@ -50,6 +52,7 @@ enum response_state
     response_parse_transfer_encoding,
     response_parse_content_length,
     response_parse_content_type,
+    response_parse_content_encoding,
 
 //    response_body,
 

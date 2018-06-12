@@ -1060,11 +1060,11 @@ response_read(struct selector_key *key) {
         if (st == response_done) {
 
             if (strcmp(parameters->command, DEFAULT_COMMAND) != 0 &&
-                strcmp(parameters->media_types_input, DEFAULT_MEDIA_TYPES_RANGES) != 0) {
+                strcmp(parameters->media_types_input, DEFAULT_MEDIA_TYPES_RANGES) != 0 &&
+                !d->response_parser.response->content_enconding_gzip) {
 
                 if (d->response_parser.response->status_code == 200
                     && d->response_parser.response->method != http_method_HEAD) {
-
 
                     uint8_t *ptr;
                     size_t count;
@@ -1073,7 +1073,79 @@ response_read(struct selector_key *key) {
 
                     if (d->response_parser.response->transfer_enconding_chunked) {
 
-                        ATTACHMENT(key)->chunk_activated = true;
+//                        ATTACHMENT(key)->chunk_activated = true;
+
+//                        // Decoding Chunked
+//                        unsigned long length = 0;
+//
+//                        unsigned long chunk_size = 0;
+//                        char chunk_size_arr[12] = {0};
+//                        int chunk_size_ptr = 0;
+//
+//                        // read chunk-size
+//                        while (buffer_can_read(b)) {
+//                            const uint8_t c = buffer_read(b);
+//
+//                            if( c == '\r') {
+//                                break;
+//                            } else {
+//                                chunk_size_arr[chunk_size_ptr++] = c;
+//                            }
+//
+//                        }
+//
+//                        // read LF
+//                        buffer_read(b);
+//
+//                        chunk_size = strtoul(chunk_size_arr, NULL, 16);
+//                        memset(chunk_size_arr, 0 ,strlen(chunk_size_arr));
+//                        chunk_size_ptr = 0;
+//
+//                        while (chunk_size > 0) {
+//                            // read chunk-size
+//                            // read chunk-data and CRLF
+//                            while (buffer_can_read(b)) {
+//                                const uint8_t c = buffer_read(b);
+//
+//                                if( c == '\r') {
+//                                    break;
+//                                } else {
+//                                    buffer_write(b, c);
+//                                }
+//
+//                            }
+//
+//                            // read LF
+//                            buffer_read(b);
+//
+//                            length = length + chunk_size;
+//
+//                            // read chunk-size, chunk-ext (if any), and CRLF
+//                            while (buffer_can_read(b)) {
+//                                const uint8_t c = buffer_read(b);
+//
+//                                if( c == '\r') {
+//                                    break;
+//                                } else {
+//                                    chunk_size_arr[chunk_size_ptr++] = c;
+//                                }
+//
+//                            }
+//
+//                            // read LF
+//                            buffer_read(b);
+//
+//                            chunk_size = strtoul(chunk_size_arr, NULL, 16);
+//                            memset(chunk_size_arr, 0 ,strlen(chunk_size_arr));
+//                            chunk_size_ptr = 0;
+//
+//                        }
+//
+//                        d->response_parser.response->content_length = length;
+//
+//                        //read last CRLF
+//                        buffer_read(b);
+//                        buffer_read(b);
 
                     } else {
 
@@ -1330,11 +1402,7 @@ transformation_read(struct selector_key *key) {
         buffer_write_adv(b, n);
 
 
-        if (!t->chunked_activated) {
-
-//            t->read_bytes_remaining = t->read_bytes_remaining - n;
-
-        } else {
+        if (t->chunked_activated) {
 
             // Dechunkear
             // Set Content-Length
@@ -1443,7 +1511,6 @@ void transf_read(struct selector_key *key) {
         selector_set_interest(key->s, *t->client_fd, OP_WRITE);
     }
 }
-
 
 void transf_write(struct selector_key *key) {
     struct transformation *t = &ATTACHMENT(key)->t;

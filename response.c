@@ -217,7 +217,7 @@ LF_after_header_value_content_length(const uint8_t c, struct response_parser *p)
 }
 
 static enum response_state
-parse_content_length(const uint8_t c, struct response_parser *p, buffer * accum) {
+parse_content_length(const uint8_t c, struct response_parser *p, buffer *accum) {
     enum response_state next;
 
     if (!p->response->content_length_present && (c == ' ' || c == '\t')) {
@@ -280,13 +280,6 @@ parse_content_type(const uint8_t c, struct response_parser *p) {
         }
     }
 
-//    if ((strchr("!#$%&'*+-.^_`|~", c) == NULL && !isdigit(c) && !isalpha(c) && c != '/' && c != ';' && c != ' ' && c != '\t')) {
-//        memset(p->content_type_medias, '\0', MAX_HEADER_FIELD_NAME_SIZE);
-//        next = response_error;
-//        p->i = 0;
-//        return next;
-//    }
-
     if ((int) p->i == MAX_HEADER_FIELD_NAME_SIZE) {
         memset(p->content_type_medias, '\0', MAX_HEADER_FIELD_NAME_SIZE);
         next = response_error;
@@ -296,6 +289,42 @@ parse_content_type(const uint8_t c, struct response_parser *p) {
 
     ((uint8_t *) &(p->content_type_medias))[p->i++] = c;
     next = response_parse_content_type;
+    return next;
+
+}
+
+static enum response_state
+parse_content_encoding(const uint8_t c, struct response_parser *p) {
+    enum response_state next;
+
+    if (strlen(p->header_field_value) == 0 && c == ' ' || c == '\t') {
+        return response_parse_content_encoding;
+    }
+
+    if (p->http_sub_parser == NULL) {
+        d = parser_utils_strcmpi("gzip");
+        p->http_sub_parser = parser_init(parser_no_classes(), &d);
+    }
+
+    switch (parser_feed(p->http_sub_parser, c)->type) {
+        case STRING_CMP_MAYEQ:
+            next = response_parse_content_encoding;
+            break;
+        case STRING_CMP_EQ:
+            parser_utils_strcmpi_destroy(p->http_sub_parser->def);
+            parser_destroy(p->http_sub_parser);
+            next = response_CR_after_header_value;
+            p->http_sub_parser = NULL;
+            p->response->content_enconding_gzip = true;
+            break;
+        case STRING_CMP_NEQ:
+        default:
+            parser_utils_strcmpi_destroy(p->http_sub_parser->def);
+            parser_destroy(p->http_sub_parser);
+            next = response_header_value;
+            break;
+    }
+
     return next;
 
 }
@@ -343,6 +372,9 @@ header_field_name(const uint8_t c, struct response_parser *p, buffer *accum) {
             } else if (strcmp(aux, "content-type") == 0) {
                 next = response_parse_content_type;
 
+            } else if (strcmp(aux, "content-encoding") == 0) {
+                next = response_parse_content_encoding;
+
             } else {
                 next = response_header_value;
             }
@@ -354,7 +386,6 @@ header_field_name(const uint8_t c, struct response_parser *p, buffer *accum) {
 
         }
 
-//        memset(aux, '\0', sizeof(aux));
         free(aux);
 
         return next;
@@ -385,7 +416,7 @@ header_field_value(const uint8_t c, struct response_parser *p) {
 
     if (c == '\r') {
         p->i = 0;
-        memset(p->header_field_name, '\0', sizeof(MAX_HEADER_FIELD_NAME_SIZE));
+        memset(p->header_field_name, '\0', MAX_HEADER_FIELD_NAME_SIZE);
         return response_LF_after_header_value;
     }
 
@@ -395,7 +426,7 @@ header_field_value(const uint8_t c, struct response_parser *p) {
 
     if ((int) p->i == MAX_HEADER_FIELD_NAME_SIZE) {
         //TODO: too long header field specific error?
-        memset(p->header_field_name, '\0', sizeof(MAX_HEADER_FIELD_NAME_SIZE));
+        memset(p->header_field_name, '\0', MAX_HEADER_FIELD_NAME_SIZE);
         next = response_error;
         p->i = 0;
         return next;
@@ -473,6 +504,9 @@ response_parser_feed(struct response_parser *p, const uint8_t c, buffer *accum) 
             break;
         case response_parse_content_type:
             next = parse_content_type(c, p);
+            break;
+        case response_parse_content_encoding:
+            next = parse_content_encoding(c, p);
             break;
         case response_header_value:
             next = header_field_value(c, p);
