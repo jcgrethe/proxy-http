@@ -845,7 +845,9 @@ request_write(struct selector_key *key) {
                     selector_set_interest_key(key, OP_READ);
                 } else {
                     ret = COPY;
+
                     selector_set_interest_key(key, OP_NOOP);
+                    selector_set_interest(key->s, *d->origin_fd, OP_WRITE);
                 }
 //                ret = COPY;
 //                selector_set_interest(key->s, *d->client_fd, OP_READ);
@@ -879,7 +881,6 @@ copy_init(const unsigned state, struct selector_key *key) {
     d->origin_fd = &ATTACHMENT(key)->origin_fd;
     d->rb = &(ATTACHMENT(key)->read_buffer);
     d->wb = &(ATTACHMENT(key)->write_buffer);
-    selector_set_interest(key->s, *d->client_fd, OP_READ);
 }
 
 /** lee bytes de un socket y los encola para ser escritos en otro socket */
@@ -929,11 +930,12 @@ copy_r(struct selector_key *key) {
 static unsigned
 copy_w(struct selector_key *key) {
     struct request_st *d = &ATTACHMENT(key)->client.request;
-    buffer *b = d->wb;
+    buffer *b = d->rb;
     uint8_t *ptr;
     size_t count;
     ssize_t n;
 
+    ptr = buffer_read_ptr(b, &count);
     n = send(key->fd, ptr, count, MSG_NOSIGNAL);
     buffer_read_adv(b, n);
     if (n == -1) {
