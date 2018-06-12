@@ -180,7 +180,7 @@ int main(int argc, char * argv[]) {
 
         //Response statuts OK accepted. Dependes on data sent.
         if (res[TYPE] == 3 && res[COMMAND] == 2) {
-            printf("Bye!");
+            printf("[  -----   Bye!  -----   ]\n");
             close(connSock);
             exit(0);
         }
@@ -189,7 +189,7 @@ int main(int argc, char * argv[]) {
           printf(ICOLOR IPREFIX ICOLOR"---Start Message---" ISUFIX "\n" SCOLOR);
           //if metric trabytes -> uint64_t sent. Else uint8_t.
           if(res[TYPE] == 1 && res[COMMAND] == 2 && res[ARGSQ] == 1){
-            for(int i = 0; i < 8; i++){
+            for(int i = 0; i < ONE_BYTE; i++){
               aux->arr[i] = res[HEADERS + i];     //Sending 8 bytes to union. 
             }                                     //After that we will be ready to read the correct number.
             printf("%llu\n", aux->lng);
@@ -197,15 +197,21 @@ int main(int argc, char * argv[]) {
             uint8_t aux1 = res[HEADERS + ONE_BYTE];
             uint8_t aux2 = res[HEADERS + ONE_BYTE + 1];
             uint8_t aux3 = res[HEADERS + ONE_BYTE + 2];
-            for(int i = 0; i < 15; i++){        //Case All metrics
+            for(int i = 0; i < ONE_BYTE; i++){        //Case All metrics
               aux->arr[i] = res[START_BYTES+i]; //Sending 8 bytes to union.
             }
             printf("Transfer Bytes:      %llu\n", aux->lng);          //8bytes transferbytes
             printf("Current Connections: %u\n", aux1);                //1byte Current Conections
             printf("Historical Access:   %u\n", aux2);                //1byte Historical Access
             printf("Connection Success:  %u\n", aux3);                //1byte Connections Success
-          } else if(res[ARGSQ] == 1){
-             printf("%u\n", res[START_BYTES]);
+          } else if(res[TYPE] == 2 && res[ARGSQ] == 0){
+              if(res[START_BYTES] == 1){
+                printf("Transformation Activated.\n");
+              } else {
+                printf("Transformation Desactivated.\n");
+              }
+          }else {
+            printf("%u\n", res[START_BYTES]);
           }
           printf(ICOLOR IPREFIX ICOLOR"---End Message---" ISUFIX "\n" RESETCOLOR);
         } else {

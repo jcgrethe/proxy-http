@@ -169,6 +169,7 @@ void sctp_read(struct selector_key *key){
 void sctp_write(struct selector_key *key){
 	struct sctp_data *data = ATTACHMENT(key);
 	int length = HEADERS + strlen(data->datagram.message), ret;
+    printf("%i", length);
 
 //	printf("Datagram: [%u %u %u %u] [%llu] [%u %u %u]\n", data->datagram.type,
 //        data->datagram.command, data->datagram.argsq, data->datagram.code, data->datagram.message,
@@ -245,7 +246,7 @@ int handle_request(struct sctp_data *data){
                     handle_config(data);
                     break;
 
-              default: // bad request
+              default:// bad request
                     handle_badrequest(data);
                     break;
             }
@@ -257,30 +258,30 @@ int handle_request(struct sctp_data *data){
 void parse_datagram(struct sctp_data *data, buffer * b){
 	int i = 0;
 	char c;
+
+    data->datagram.code = INVALID_ARG;
+
 	if (buffer_can_read(b)){
-			data->datagram.type = (uint8_t)buffer_read(b);
-		}else{
-			// Type not found
-		}
-		if (buffer_can_read(b)){
-			data->datagram.command = (uint8_t)buffer_read(b);
-		}else{
-			// Command not found
-		}
-		if (buffer_can_read(b)){
-			data->datagram.argsq = (uint8_t)buffer_read(b);
-		}else{
-			// Argsq not found
-		}
-		if (buffer_can_read(b)){
-			data->datagram.code = (uint8_t)buffer_read(b);
-		}else{
-			// Code not found
-		}
-        while(buffer_can_read(b) && i < MAX_DATAGRAM_MESSAGE){
-            c = buffer_read(b);
-			data->datagram.message[i++] = c;
-        }
+		data->datagram.type = (uint8_t)buffer_read(b);
+	}
+	
+    if (buffer_can_read(b)){
+		data->datagram.command = (uint8_t)buffer_read(b);
+    } 
+	
+    if (buffer_can_read(b)){
+		data->datagram.argsq = (uint8_t)buffer_read(b);
+	} 
+	
+    if (buffer_can_read(b)){
+		data->datagram.code = (uint8_t)buffer_read(b);
+        data->datagram.code = OK;
+	} 
+    
+    while(buffer_can_read(b) && i < MAX_DATAGRAM_MESSAGE){
+        c = buffer_read(b);
+		data->datagram.message[i++] = c;
+    }
 }
 
 int check_login(char message[MAX_DATAGRAM_MESSAGE]){
@@ -295,11 +296,11 @@ int check_login(char message[MAX_DATAGRAM_MESSAGE]){
 void handle_metric(struct sctp_data * data){
     clean(data->datagram.message);
     data->datagram.code = 1;
-    if(data->datagram.argsq == 0){
-        data->datagram.message[ONE_BYTE] = metrstr->currcon;    
-        data->datagram.message[ONE_BYTE + 1] = metrstr->histacc;  
-        data->datagram.message[ONE_BYTE + 2] = metrstr->connsucc;  
+    if(data->datagram.argsq == 0){ 
         memcpy(data->datagram.message, metrstr->transfby->tfbyt_8, NUMBYTES);   //8bytes transferbytes       
+        data->datagram.message[NUMBYTES] = metrstr->currcon;
+        data->datagram.message[NUMBYTES + 1] = metrstr->histacc;
+        data->datagram.message[NUMBYTES + 2] = metrstr->connsucc;
         data->datagram.command = 0; 
         data->datagram.argsq = 4;                                        
     }else if(data->datagram.argsq == 1){  
@@ -339,6 +340,7 @@ void handle_config(struct sctp_data * data){
     if(data->datagram.argsq == 0 && data->datagram.command == 0 && data->datagram.code == 0){
         data->datagram.code = 1;
         change_transformation();
+        data->datagram.message[0] = transformation_mode;
     }else{
         strcpy(data->datagram.message, "Invalid config arguments.\n");
         data->datagram.code = 4;
