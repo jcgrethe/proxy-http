@@ -27,6 +27,7 @@
 
 #include "metrics_struct.h"
 #include "../selector.h"
+#include "../parameters.h"
 #include "sctp_integration.h"
 #include "common.h"
 
@@ -336,15 +337,28 @@ void handle_metric(struct sctp_data * data){
 }
 
 void handle_config(struct sctp_data * data){
-    clean(data->datagram.message);
-    if(data->datagram.argsq == 0 && data->datagram.command == 0 && data->datagram.code == 0){
-        data->datagram.code = 1;
-        change_transformation();
+    if(data->datagram.command == TRANSFORM){
+        data->datagram.code = OK;
+        change_transformation(); 
+        clean(data->datagram.message);
         data->datagram.message[0] = transformation_mode;
-    }else{
-        strcpy(data->datagram.message, "Invalid config arguments.\n");
-        data->datagram.code = 4;
+    } else if(data->datagram.argsq == 1 && data->datagram.command == MEDIATYPES){
+        char * c = malloc(8 * sizeof(data->datagram.message));
+        memcpy(c, data->datagram.message, sizeof(data->datagram.message));
+        parameters->command = c;
+        clean(data->datagram.message);
+        data->datagram.code = OK;
+    } else if(data->datagram.argsq == 1 && data->datagram.command == COMM){
+        char * c = malloc(8 * sizeof(data->datagram.message));
+        strcpy(c, data->datagram.message);
+        parameters->command = c;
+        clean(data->datagram.message);
+        data->datagram.code = OK;
+    } else {
+        data->datagram.code = INVALID_ARG;
     }
+
+    printf("%s %s\n", parameters->media_types_input, parameters->command);
 }
 
 void handle_badrequest(struct sctp_data * data){

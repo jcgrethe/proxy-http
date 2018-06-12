@@ -39,8 +39,8 @@ int handleLogin(uint8_t * second, uint8_t * third, int connSock){
   memcpy(&datagram[4], second, secondLenght);
   datagram[4 + secondLenght] = ' ';
   memcpy(&datagram[4 + secondLenght + 1], third, thirdLenght);
-  memcpy(&datagram[4 + secondLenght + thirdLenght+ 1], "\0", 1);
-//  datagram[4 + secondLenght + thirdLenght + 1] = "\0";
+  memcpy(&datagram[4 + secondLenght + thirdLenght + 1], "\0", 1);
+  //  datagram[4 + secondLenght + thirdLenght + 1] = "\0";
   // Send login request
 
   printf(ICOLOR IPREFIX " ...Sending login... ");
@@ -107,14 +107,23 @@ int handleMetric(char * second, char * third, int connSock){
   return 0;     
 }
 
-int handleConfig(char * second, int connSock){
-  char type = 2, command = 0, argsq = 0, code = 0, ret, lenght = 4;
-  uint8_t datagram[MAX_DATAGRAM];
+int handleConfig(char * second, char * third, int connSock){
+  char type = 2, command = 0, argsq = 0, code = 0, ret, lenght = 4, thirdLenght = strlen(third);
+  uint8_t datagram[lenght + thirdLenght + 1];
   
   if(strcmp(second, "transform") == 0){
-    command = 0;
-  }else{
-    printf(ECOLOR EPREFIX " Invalid config. " ESUFIX RESETCOLOR"\n");
+    command = TRANSFORM;
+  } else if(strcmp(second, "mediatypes") == 0){
+    command = MEDIATYPES;
+    argsq = 1;
+    memcpy(&datagram[4], third, thirdLenght);
+  } else if(strcmp(second, "command") == 0){
+    command = COMM;
+    argsq = 1;
+    lenght += thirdLenght;
+    memcpy(&datagram[4], third, thirdLenght);
+  } else{
+    printf(ECOLOR EPREFIX " Invalid Config. " ESUFIX RESETCOLOR"\n");
     return 0;
   }    
   
@@ -123,7 +132,7 @@ int handleConfig(char * second, int connSock){
   datagram[2] = argsq;
   datagram[3] = code;
 
-  ret = sctp_sendmsg( connSock, (const void *)datagram, lenght,
+  ret = sctp_sendmsg( connSock, (const void *)datagram, lenght + thirdLenght + 1,
                          NULL, 0, 0, 0, STREAM, 0, 0 );
   if(ret > 1){
     return 1;
@@ -131,7 +140,7 @@ int handleConfig(char * second, int connSock){
   return 0;  
 }
 
-int handleHelp(char * second, char * third, int connSock){
+int handleHelp(){
   printf("\nWe are here to help you!\n");
   
   printf("        [Access]        \n\n");
@@ -150,16 +159,6 @@ int handleHelp(char * second, char * third, int connSock){
   printf("exit [NONE].\n");
   return 0;
 }
-
-// void handleBlock(char * second, char * third, int connSock){
-//   char type = 0b0003, command = 1, argsq = 0, code = 0;
-//   if(second != NULL || third != NULL){
-//     printf("Block function does not allow params!\n");
-//     return;
-//   }  
-
-//   //Send
-// }
 
 int handleExit(char * second, char * third, int connSock){
   char type = 3, command = 2, argsq = 0, code = 0, ret;

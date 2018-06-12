@@ -142,29 +142,29 @@ int main(int argc, char * argv[]) {
   if (strcmp(first, "login") == 0) {
     if (handleLogin(second, third, connSock)) {
       while (1) {
-        first[0] = 0;
+        first[0]  = 0;
         second[0] = 0;
-        third[0] = 0;
-//        first[0] = NULL;
-//        second[0] = NULL;
-//        third[0] = NULL;
+        third[0]  = 0;
+
         if (fgets(buffer, sizeof(buffer), stdin) == NULL) {
           printf(ECOLOR EPREFIX " No characters read " ESUFIX RESETCOLOR"\n");
           break;
         }
-        sscanf(buffer, "%s %s %s", first, second, third);
+        sscanf(buffer, "%s %s %s[\0]", first, second, third);
         if (strcmp(first, "metric") == 0) {
           if (!handleMetric(second, third, connSock)) {
             continue;
           }
         } else if (strcmp(first, "config") == 0) {
-          if (!handleConfig(second, connSock)) {
+          if (!handleConfig(second, third, connSock)) {
             continue;
           }
         } else if (strcmp(first, "exit") == 0) {
           if (!handleExit(second, third, connSock)) {
             continue;
           }
+        } else if (strcmp(first, "help") == 0) {
+          handleHelp();
         } else {
           printf(ECOLOR EPREFIX " Bad Request " ESUFIX RESETCOLOR"\n");
           continue;
@@ -193,17 +193,6 @@ int main(int argc, char * argv[]) {
               aux->arr[i] = res[HEADERS + i];     //Sending 8 bytes to union. 
             }                                     //After that we will be ready to read the correct number.
             printf("%llu\n", aux->lng);
-          } else if(res[TYPE] == 1 && res[COMMAND] == 0 && res[ARGSQ] == 4){
-            uint8_t aux1 = res[HEADERS + ONE_BYTE];
-            uint8_t aux2 = res[HEADERS + ONE_BYTE + 1];
-            uint8_t aux3 = res[HEADERS + ONE_BYTE + 2];
-            for(int i = 0; i < ONE_BYTE; i++){        //Case All metrics
-              aux->arr[i] = res[START_BYTES+i]; //Sending 8 bytes to union.
-            }
-            printf("Transfer Bytes:      %llu\n", aux->lng);          //8bytes transferbytes
-            printf("Current Connections: %u\n", aux1);                //1byte Current Conections
-            printf("Historical Access:   %u\n", aux2);                //1byte Historical Access
-            printf("Connection Success:  %u\n", aux3);                //1byte Connections Success
           } else if(res[TYPE] == 2 && res[ARGSQ] == 0){
               if(res[START_BYTES] == 1){
                 printf("Transformation Activated.\n");

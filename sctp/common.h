@@ -27,16 +27,23 @@
 #define ARGSQ				2
 #define CODE				3
 
+//METRICS
 #define CURRCON				0
 #define HISTACC 			1
 #define TRABYTES			2
 #define CONNSUCC			3
 
+//CONFIGS
+#define TRANSFORM			0
+#define MEDIATYPES 			1
+#define COMM				2
+
+
 #define REQUEST				0
 #define OK		 			1
 #define BAD_CREDENTIALS		2
 #define BAD_REQUEST			3
-#define INVALID_CRED		4
+#define INVALID_ARG			4
 #define UNAUTHORIZED		5
 
 
