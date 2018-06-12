@@ -526,26 +526,6 @@ request_read(struct selector_key *key) {
         }
         if (request_is_done(st, 0)) {
             ret = request_process(key, d);
-//            if (strlen(d->request.host) != 0) {
-//                d->parser.state = request_header_field_name;
-//                request_consume(b, &d->parser, &error, &d->accum);
-//                ret = request_process(key, d);
-//
-//                while (buffer_can_read(b)) {
-//                    const uint8_t c = buffer_read(b);
-//                    if (buffer_can_write(&d->accum)) {
-//                        buffer_write(&d->accum, c);
-//                    }
-//                }
-
-//                ret = COPY;
-//                selector_set_interest(key->s, *d->client_fd, OP_READ);
-//                selector_set_interest(key->s, *d->origin_fd, OP_NOOP);
-//
-//            } else if (st == request_error_unsupported_method) {
-//                return request_process(key, d);
-//            }
-
         }
     } else {
         ret = ERROR;
@@ -584,22 +564,6 @@ request_process(struct selector_key *key, struct request_st *d) {
         case http_method_POST:
         case http_method_HEAD:
         case http_method_GET:
-            printf("%d\n", n++);
-//             switch (d->request.dest_addr_type)
-//             {
-//             case socks_req_addrtype_ipv4:
-//             {
-//                 ATTACHMENT(key)->origin_domain = AF_INET;
-//                 d->request.dest_addr.ipv4.sin_port = d->request.dest_port;
-//                 ATTACHMENT(key)->origin_addr_len =
-//                     sizeof(d->request.dest_addr.ipv4);
-//                 memcpy(&ATTACHMENT(key)->origin_addr, &d->request.dest_addr,
-//                        sizeof(d->request.dest_addr.ipv4));
-//                 ret = request_connect(key, d);
-//                 break;
-//             }
-//             case socks_req_addrtype_domain:
-//             {
             if (k == NULL) {
                 ret = REQUEST_WRITE;
                 d->status = status_general_HTTP_server_failure;
@@ -1148,9 +1112,6 @@ response_read(struct selector_key *key) {
                         buffer_reset(b);
                         write_buffer_buffer(b,&aux);
                         ATTACHMENT(key)->content_length = length;
-                        //read last CRLF
-//                        buffer_read(b);
-//                        buffer_read(b);
 
                     } else {
 
@@ -1274,19 +1235,9 @@ response_write(struct selector_key *key) {
             selector_status ss = SELECTOR_SUCCESS;
             ss |= selector_set_interest_key(key, OP_NOOP);
             ss |= selector_set_interest(key->s, ATTACHMENT(key)->origin_fd, OP_READ);
-//            ss |= selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_WRITE);
-//            ret = ss == SELECTOR_SUCCESS ? COPY : ERROR;
-//            } else {
-
-//                ret = response_process(key, d);
-//                ret = DONE;
-//            }
-//            ret = DONE;
-//            ret = RESPONSE;
         } else {
             selector_status ss = SELECTOR_SUCCESS;
             ss |= selector_set_interest_key(key, OP_NOOP);
-            //ss |= selector_set_interest(key->s, ATTACHMENT(key)->origin_fd, OP_READ);
             ss |= selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_WRITE);
         }
     }
@@ -1294,21 +1245,6 @@ response_write(struct selector_key *key) {
     return ret;
 }
 
-enum http_state
-response_process(struct selector_key *key, struct response_st *d) {
-    enum http_state ret;
-
-    switch (d->request->method) {
-
-    }
-
-    selector_status ss = SELECTOR_SUCCESS;
-    ss |= selector_set_interest_key(key, OP_READ);
-    ss |= selector_set_interest(key->s, ATTACHMENT(key)->origin_fd, OP_NOOP);
-    ret = ss == SELECTOR_SUCCESS ? REQUEST_READ : ERROR;
-
-    return ret;
-}
 
 static void
 response_close(struct response_parser *p, struct selector_key *key) {
@@ -1322,19 +1258,11 @@ response_close(struct response_parser *p, struct selector_key *key) {
 
 enum transf_status start_transformation(struct selector_key *key);
 
-bool finished_transformation(struct transformation *t) {
-    if (t->finish_rd && t->finish_wr) {
-        return true;
-    } else if (t->finish_rd && t->error_wr) {
-        return true;
-    }
-    return false;
-}
+
 
 static void
 transformation_init(const unsigned state, struct selector_key *key) {
     struct transformation *t = &ATTACHMENT(key)->t;
-
     t->rb = &ATTACHMENT(key)->response_read_buffer;
 //    t->rb = &ATTACHMENT(key)->write_buffer;
     t->wb = &ATTACHMENT(key)->transf_read_buffer;
@@ -1382,7 +1310,6 @@ transformation_init(const unsigned state, struct selector_key *key) {
         selector_set_interest(key->s, *t->client_fd, OP_WRITE);
     }
 
-
 }
 
 static unsigned
@@ -1399,7 +1326,6 @@ transformation_read(struct selector_key *key) {
     ptr = buffer_write_ptr(b, &count);
     n = recv(*t->origin_fd, ptr, count, 0);
     t->content_length -= n;
-    printf("Origin Receive: %d\n", n);
     if (n > 0) {
         buffer_write_adv(b, n);
 
@@ -1546,7 +1472,6 @@ transformation_close(const unsigned state, struct selector_key *key) {
 
 void transf_read(struct selector_key *key) {
     struct transformation *t = &ATTACHMENT(key)->t;
-    static int aux = 0;
     buffer *b = t->transf_rb;
     uint8_t *ptr;
     size_t count;
@@ -1554,9 +1479,7 @@ void transf_read(struct selector_key *key) {
 
     ptr = buffer_write_ptr(b, &count);
     n = read(*t->transf_read_fd, ptr, count);
-    aux += n;
     t->client_remaining -= n;
-    printf("receive:%d\n", aux);
     if (n < 0) {
         buffer_write_adv(b, n);
         selector_set_interest(key->s, *t->client_fd, OP_WRITE);
@@ -1570,7 +1493,6 @@ void transf_read(struct selector_key *key) {
 
 void transf_write(struct selector_key *key) {
     struct transformation *t = &ATTACHMENT(key)->t;
-    static int a = 0;
     buffer *b = t->transf_wb;
     uint8_t *ptr;
     size_t count;
@@ -1578,8 +1500,6 @@ void transf_write(struct selector_key *key) {
     ptr = buffer_read_ptr(b, &count);
     size_t bytes_sent = count;
     n = write(*t->transf_write_fd, ptr, bytes_sent);
-    a += n;
-    printf("send: %d\n", a);
     t->read_bytes_remaining = count - n;
     if (n > 0) {
         buffer_read_adv(b, n);
@@ -1594,7 +1514,6 @@ void transf_write(struct selector_key *key) {
 }
 
 void transf_close(struct selector_key *key) {
-    printf("transf close\n");
     close(key->fd);
 }
 
@@ -1613,8 +1532,6 @@ start_transformation(struct selector_key *key) {
     args[2] = calloc(1, 30);
     args[0] = "bash";
     args[1] = "-c";
-//    strcat(args[2],"stdbuf -o0 ");
-    //   strcat(args[2],parameters->command);
     args[2] = parameters->command;
     args[3] = NULL;
 
@@ -1631,7 +1548,6 @@ start_transformation(struct selector_key *key) {
     if ((pid = fork()) == -1) {
         perror("fork error");
     } else if (pid == 0) {
-        printf("Fork\n");
         dup2(fd_write[0], STDIN_FILENO);
         dup2(fd_read[1], STDOUT_FILENO);
 
@@ -1640,17 +1556,14 @@ start_transformation(struct selector_key *key) {
         close(fd_read[0]);
 
         // append/update
-        //FILE *f = freopen(parameters->error_file, "a+", stderr);
-//        if (f == NULL) {
-//            printf("Fork error\n");
-//            exit(-1);
-//        }
-        int value;
-        value = execve("/bin/bash", args, NULL);
+        FILE *f = freopen(parameters->error_file, "a+", stderr);
+        if (f == NULL) {
+            printf("Fork error\n");
+            exit(-1);
+        }
+        int value = execve("/bin/bash", args, NULL);;
         perror("execve");
-        printf("Fork error 2\n");
         if (value == -1) {
-            printf("Fork error 3\n");
             fprintf(stderr, "Error executing command.\n");
         }
         exit(0);
