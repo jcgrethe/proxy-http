@@ -836,9 +836,11 @@ request_write(struct selector_key *key) {
         send(*d->client_fd,HTTP_CODE_503,strlen(HTTP_CODE_503),0);
         return ERROR;
     } else {
+
         /* Metrics Start. */
         metrstr->transfby->tfbyt_ll += n;
         /* Metrics end.   */
+        
         buffer_read_adv(b, n);
 
         if (!buffer_can_read(b)) {
@@ -980,6 +982,10 @@ copy_w(struct selector_key *key) {
             d->other->duplex &= ~OP_READ;
         }
     } else {
+        /* Metrics Start. */
+        metrstr->transfby->tfbyt_ll += n;
+        /* Metrics end.   */
+
         buffer_read_adv(b, n);
     }
     copy_compute_interests(key->s, d);
@@ -1028,6 +1034,7 @@ response_init(const unsigned state, struct selector_key *key) {
  */
 static unsigned
 response_read(struct selector_key *key) {
+
     struct response_st *d = &ATTACHMENT(key)->orig.response;
     unsigned ret = RESPONSE;
     bool error = false;
@@ -1258,6 +1265,11 @@ response_write(struct selector_key *key) {
     if (n == -1) {
         ret = ERROR;
     } else {
+
+        /* Metrics Start. */
+        metrstr->transfby->tfbyt_ll += n;
+        /* Metrics end.   */
+
         buffer_read_adv(b, n);
 
         if (!buffer_can_read(b)) {
@@ -1500,6 +1512,11 @@ transformation_write(struct selector_key *key) {
     n = send(*et->client_fd, ptr, bytes_sent, MSG_NOSIGNAL);
     send(*et->client_fd, "\r\n", 2, MSG_NOSIGNAL);
     if (n >= 0) {
+
+        /* Metrics Start. */
+        metrstr->transfby->tfbyt_ll += n;
+        /* Metrics end.   */
+
         buffer_read_adv(b, n);
         if (et->read_bytes_remaining > 0) {
             selector_set_interest(key->s, *et->transf_write_fd, OP_WRITE);
@@ -1581,6 +1598,11 @@ void transf_write(struct selector_key *key) {
     printf("send: %d\n", a);
     t->read_bytes_remaining = count - n;
     if (n > 0) {
+
+        /* Metrics Start. */
+        metrstr->transfby->tfbyt_ll += n;
+        /* Metrics end.   */
+
         buffer_read_adv(b, n);
         selector_set_interest(key->s, *t->transf_read_fd, OP_READ);
         selector_set_interest(key->s, *t->transf_write_fd, OP_NOOP);
@@ -1759,6 +1781,11 @@ http_write(struct selector_key *key) {
     const enum http_state st = stm_handler_write(stm, key);
 
     if (ERROR == st || DONE == st) {
+        if(DONE == st){
+            /* Metrics Start. */
+            metrstr->connsucc += 1;
+            /* Metrics End  . */
+        }
         http_done(key);
     }
 }
@@ -1769,6 +1796,11 @@ http_block(struct selector_key *key) {
     const enum http_state st = stm_handler_block(stm, key);
 
     if (ERROR == st || DONE == st) {
+        if(DONE == st){
+            /* Metrics Start. */
+            metrstr->connsucc += 1;
+            /* Metrics End  . */
+        }
         http_done(key);
     }
 }
@@ -1779,7 +1811,6 @@ http_close(struct selector_key *key) {
 }
 
 static void
-
 http_done(struct selector_key *key) {
     const int fds[] = {
             ATTACHMENT(key)->client_fd,
@@ -1796,6 +1827,5 @@ http_done(struct selector_key *key) {
 
     /* Metrics Start. */
     metrstr->currcon -= 1;
-    metrstr->connsucc += 1;
     /* Metrics End  . */
 }
