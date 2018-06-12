@@ -681,6 +681,15 @@ request_connect(struct selector_key *key, struct request_st *d) {
     bool error = false;
     // da legibilidad
     enum response_status status = d->status;
+    if(d->status == status_general_HTTP_server_failure){
+        //Couldn't connect
+        write_buffer_string(d->wb, HTTP_CODE_503);
+        selector_status s = 0;
+        s |= selector_set_interest(key->s, *d->client_fd, OP_WRITE);
+        int ret = SELECTOR_SUCCESS == s ? REQUEST_WRITE : ERROR;
+        return ret;
+    }
+
     int *fd = d->origin_fd;
     *fd = socket(ATTACHMENT(key)->origin_domain, SOCK_STREAM, 0);
     if (*fd == -1) {
