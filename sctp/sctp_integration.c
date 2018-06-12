@@ -340,9 +340,9 @@ void handle_metric(struct sctp_data * data){
 void handle_config(struct sctp_data * data){
     if(data->datagram.command == TRANSFORM){
         data->datagram.code = OK;
-        change_transformation(); 
+        parameters->transformations = !parameters->transformations;
         clean(data->datagram.message);
-        data->datagram.message[0] = transformation_mode;
+        data->datagram.message[0] = parameters->transformations;
     } else if(data->datagram.argsq == 1 && data->datagram.command == MEDIATYPES){
         char * c = malloc(8 * sizeof(data->datagram.message));
 
