@@ -831,7 +831,8 @@ request_write(struct selector_key *key) {
     n = send(key->fd, ptr, count, MSG_NOSIGNAL);
 
     if (n == -1) {
-        ret = ERROR;
+        send(*d->client_fd,HTTP_CODE_503,strlen(HTTP_CODE_503),0);
+        return ERROR;
     } else {
         /* Metrics Start. */
         metrstr->transfby->tfbyt_ll += n;
@@ -1755,6 +1756,7 @@ http_close(struct selector_key *key) {
 }
 
 static void
+
 http_done(struct selector_key *key) {
     const int fds[] = {
             ATTACHMENT(key)->client_fd,
