@@ -6,13 +6,6 @@
  *  M. Tim Jones <mtj@mtjones.com>
  *
  */
-//    Styles examples
-//    printf(SCOLOR SPREFIX " Succes using styles! " SSUFIX RESETCOLOR"\n");
-//    printf(ECOLOR EPREFIX " Error using styles! " ESUFIX RESETCOLOR"\n");
-//    printf(ICOLOR IPREFIX " Info using styles! " ISUFIX RESETCOLOR"\n");
-//    printf(WCOLOR WPREFIX " Warning using styles! " WSUFIX RESETCOLOR"\n");
-//    printf(TCOLOR TPREFIX " Title using styles! " TSUFIX RESETCOLOR"\n");
-//    printf(STCOLOR STPREFIX " Subtitle using styles! " STSUFIX RESETCOLOR"\n");
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -151,7 +144,6 @@ int main(int argc, char * argv[]) {
           break;
         }
         sscanf(buffer, "%s %s %[\001-\377]", first, second, third);
-        printf(third);
         if (strcmp(first, "metric") == 0) {
           if (!handleMetric(second, third, connSock)) {
             continue;

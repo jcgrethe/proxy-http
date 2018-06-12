@@ -74,10 +74,8 @@ method(const uint8_t c, struct request_parser *p) {
             break;
         case STRING_CMP_NEQ:
         default:
-            // TODO: this can fail / start
             parser_utils_strcmpi_destroy(p->http_sub_parser->def);
             parser_destroy(p->http_sub_parser);
-            // TODO: this can fail / end
             next = request_error_unsupported_method;
             p->request->method = -1;
             break;
@@ -162,7 +160,6 @@ target(const uint8_t c, struct request_parser *p) {
         p->i++;
 
         if (retrieveHostAndPort(p->request, p->request_target) == -1) {
-//            TODO: si no te lo encontró no me devuelvas error?
             next = request_error;
         } else {
             next = request_HTTP_version;
@@ -212,10 +209,8 @@ HTTP_version(const uint8_t c, struct request_parser *p) {
             break;
         case STRING_CMP_NEQ:
         default:
-            // TODO: this can fail / start
             parser_utils_strcmpi_destroy(p->http_sub_parser->def);
             parser_destroy(p->http_sub_parser);
-            // TODO: this can fail / end
             next = request_error_unsupported_method;
             break;
     }
@@ -294,7 +289,6 @@ header_field_name(const uint8_t c, struct request_parser *p, buffer *b) {
         return request_waiting_for_LF;
     }
 
-    //TODO arreglar fix caso feliz
     if (c == ' ') {
         return request_header_field_name;
     }
@@ -404,7 +398,6 @@ header_field_value(const uint8_t c, struct request_parser *p) {
         return LF_end;
     }
     if ((int) p->i == MAX_HEADER_FIELD_VALUE_SIZE) {
-        //TODO: too long header field specific error?
         memset(p->header_field_value, '\0', MAX_HEADER_FIELD_VALUE_SIZE);
         next = request_error;
         p->i = 0;
@@ -423,7 +416,6 @@ ignore_header(const uint8_t c, struct request_parser *p) {
         return ignore_LF_end;
     }
     if ((int) p->i == MAX_HEADER_FIELD_VALUE_SIZE) {
-        //TODO: too long header field specific error?
         memset(p->header_field_value, '\0', MAX_HEADER_FIELD_VALUE_SIZE);
         next = request_error;
         p->i = 0;
@@ -461,7 +453,6 @@ header_host_field_value(const uint8_t c, struct request_parser *p) {
             return request_host_field_value;
         } else {
             p->i = 0;
-            //TODO: remember to free p->request->host
             size_t len = strlen(p->header_field_value);
             memcpy(p->request->host, p->header_field_value, len + 1);
             p->request->host[len] = '\0';
@@ -477,7 +468,6 @@ header_host_field_value(const uint8_t c, struct request_parser *p) {
         // If host value was empty, error.
         if (strlen(p->header_field_value) != 0) {
             p->i = 0;
-            //TODO: remember to free p->request->host
             size_t len = strlen(p->header_field_value);
             memcpy(p->request->host, &p->header_field_value, len + 1);
             p->request->host[len] = '\0';
@@ -487,7 +477,6 @@ header_host_field_value(const uint8_t c, struct request_parser *p) {
             return request_waiting_for_LF;
 
         } else {
-            //TODO: probablemente p->i = 0; deberia estar en varios lugares más (donde retorne a otro estado)
             p->i = 0;
             return request_error;
         }
@@ -495,7 +484,6 @@ header_host_field_value(const uint8_t c, struct request_parser *p) {
     }
 
     if ((int) p->i == MAX_HEADER_FIELD_VALUE_SIZE) {
-        //TODO: too long header field value specific error?
         memset(p->header_field_value, '\0', sizeof(MAX_HEADER_FIELD_VALUE_SIZE));
         next = request_error;
         p->i = 0;
@@ -526,7 +514,6 @@ request_parser_init(struct request_parser *p) {
     p->host_field_value_complete = 0;
 }
 
-//TODO: check whether case request_some_error is okay
 extern enum request_state
 request_parser_feed(struct request_parser *p, const uint8_t c, buffer *accum) {
     enum request_state next;
@@ -649,12 +636,6 @@ request_consume(buffer *b, struct request_parser *p, bool *errored, buffer *accu
 
     while (buffer_can_read(b)) {
         const uint8_t c = buffer_read(b);
-
-        /* save byte to request accum */
-//        if (buffer_can_write(accum)) {
-//            buffer_write(accum, c);
-//        }
-
         st = request_parser_feed(p, c, accum);
 
         if (st != request_no_empty_host
@@ -672,12 +653,7 @@ request_consume(buffer *b, struct request_parser *p, bool *errored, buffer *accu
         }
     }
 
-//    while (buffer_can_read(b)) {
-//        const uint8_t c = buffer_read(b);
-//        if (buffer_can_write(accum)) {
-//            buffer_write(accum, c);
-//        }
-//    }
+
     finally:
 
     return st;

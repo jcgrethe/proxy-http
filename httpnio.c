@@ -483,7 +483,7 @@ request_init(const unsigned state, struct selector_key *key) {
     d->request.content_length = 0;
     d->raw_buff_accum = calloc(1, 1024 * 1024);
     buffer_init(&d->accum, 1024 * 1024, d->raw_buff_accum);
-    d->request.host = calloc(1, MAX_HEADER_FIELD_VALUE_SIZE); //todo: FREE
+    d->request.host = calloc(1, MAX_HEADER_FIELD_VALUE_SIZE);
 }
 
 static unsigned
@@ -532,7 +532,6 @@ request_read(struct selector_key *key) {
     }
 
 
-    // TODO: vuela error en rquest_consume?
     return error ? ERROR : ret;
     //return ret;
 }
@@ -1008,7 +1007,7 @@ response_read(struct selector_key *key) {
     size_t count;
     ssize_t n;
     buffer aux;
-    char aux_buffer[BUFFER_SIZE];
+    uint8_t aux_buffer[BUFFER_SIZE];
     ptr = buffer_write_ptr(b, &count);
     // Some bytes reserved to the modification of the headers and chunks management
     n = recv(key->fd, ptr, count - 100, 0);
@@ -1257,13 +1256,6 @@ response_write(struct selector_key *key) {
     return ret;
 }
 
-
-static void
-response_close(struct response_parser *p, struct selector_key *key) {
-    struct response_st *d = &ATTACHMENT(key)->orig.response;
-//    response_parser_close(&d->response_parser);
-}
-
 ////////////////////////////////////////////////////////////////////////////////
 // TRANSFORMATION
 ////////////////////////////////////////////////////////////////////////////////
@@ -1344,7 +1336,7 @@ transformation_read(struct selector_key *key) {
 
         if (t->chunked_activated) {
             buffer aux;
-            char aux_buffer[BUFFER_SIZE];
+            uint8_t aux_buffer[BUFFER_SIZE];
             unsigned long length = 0;
             buffer_init(&aux, N(aux_buffer), aux_buffer);
 
@@ -1551,7 +1543,6 @@ start_transformation(struct selector_key *key) {
 
     pid_t pid;
     char *args[4];
-    args[2] = calloc(1, 30);
     args[0] = "bash";
     args[1] = "-c";
     args[2] = parameters->command;
@@ -1588,6 +1579,7 @@ start_transformation(struct selector_key *key) {
         if (value == -1) {
             fprintf(stderr, "Error executing command.\n");
         }
+
         exit(0);
     } else {
         close(fd_write[0]);
@@ -1651,7 +1643,6 @@ static const struct state_definition client_statbl[] = {
                 .on_arrival       = response_init,
                 .on_read_ready    = response_read,
                 .on_write_ready   = response_write,
-                .on_departure     = response_close,
         },
         {
                 .state            = TRANSFORMATION,
