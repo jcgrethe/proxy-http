@@ -1296,6 +1296,9 @@ transformation_read(struct selector_key *key) {
 
     } else if (n == -1) {
         ret = ERROR;
+    }if(n==0){
+        selector_set_interest(key->s, *t->transf_write_fd, OP_WRITE);
+        selector_set_interest(key->s, *t->origin_fd, OP_NOOP);
     }
 
     return ret;
@@ -1381,6 +1384,7 @@ void transf_read(struct selector_key *key) {
     t->client_remaining-=n;
     printf("receive:%d\n",aux);
     if (n < 0) {
+        buffer_write_adv(b, n);
         selector_set_interest(key->s, *t->client_fd, OP_WRITE);
         selector_set_interest(key->s, *t->transf_write_fd, OP_NOOP);
     } else if (n > 0) {
@@ -1432,9 +1436,12 @@ start_transformation(struct selector_key *key) {
 
     pid_t pid;
     char *args[4];
+    args[2]=calloc(1,30);
     args[0] = "bash";
     args[1] = "-c";
-    args[2] =parameters->command;
+//    strcat(args[2],"stdbuf -o0 ");
+ //   strcat(args[2],parameters->command);
+    args[2]=parameters->command;
     args[3] = NULL;
 
     int fd_read[2];
