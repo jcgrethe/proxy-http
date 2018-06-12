@@ -1089,7 +1089,8 @@ response_read(struct selector_key *key) {
         enum response_state st = response_consume(b, &d->response_parser, &error, d->wb, &n);
         if (st == response_done) {
 
-            if (strcmp(parameters->command, DEFAULT_COMMAND) != 0 &&
+            if (parameters->transformations &&
+                    strcmp(parameters->command, DEFAULT_COMMAND) != 0 &&
                 strcmp(parameters->media_types_input, DEFAULT_MEDIA_TYPES_RANGES) != 0 &&
                 !d->response_parser.response->content_enconding_gzip && validate_media_type(d->response_parser.content_type_medias, parameters->mts) > 0) {
 
