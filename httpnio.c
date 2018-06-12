@@ -1087,8 +1087,11 @@ response_read(struct selector_key *key) {
                 }
 
             } else {
-
-                return response_error; //TODO: No Content-length or TEnconding present
+                // No body
+                selector_status ss = SELECTOR_SUCCESS;
+                ss |= selector_set_interest_key(key, OP_NOOP);
+                ss |= selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_WRITE);
+                return ss == SELECTOR_SUCCESS ? RESPONSE : ERROR;
 
             }
 
