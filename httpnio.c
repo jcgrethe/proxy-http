@@ -1009,7 +1009,8 @@ response_read(struct selector_key *key) {
     ssize_t n;
 
     ptr = buffer_write_ptr(b, &count);
-    n = recv(key->fd, ptr, count, 0);
+    // Some bytes reserved to the modification of the headers and chunks management
+    n = recv(key->fd, ptr, count-100, 0);
 
     if (n > 0 || buffer_can_read(b)) {
         buffer_write_adv(b, n);
@@ -1066,7 +1067,7 @@ response_read(struct selector_key *key) {
 
             } else if (d->response_parser.response->content_length_present) {
 
-                char chunk_size[12];
+                char chunk_size[12]={0};
                 sprintf(chunk_size, "%X\r\n", (unsigned int) n);
                 write_buffer_string(d->wb, chunk_size);
                 write_buffer_buffer(d->wb, b);
@@ -1332,7 +1333,6 @@ transformation_write(struct selector_key *key) {
                 selector_set_interest(key->s, *et->client_fd, OP_NOOP);
                 return ret;
             } else if (et->client_remaining!=0) {
-                //selector_set_interest(key->s, *et->transf_write_fd, OP_NOOP);
                 selector_set_interest(key->s, *et->origin_fd, OP_NOOP);
                 selector_set_interest(key->s, *et->client_fd, OP_NOOP);
                 selector_set_interest(key->s, *et->transf_read_fd, OP_READ);
@@ -1383,10 +1383,10 @@ void transf_read(struct selector_key *key) {
     } else if (n > 0) {
         buffer_write_adv(b, n);
         selector_set_interest(key->s, *t->client_fd, OP_WRITE);
-       // selector_set_interest(key->s, *t->transf_write_fd, OP_NOOP);
     }
-
 }
+
+
 void transf_write(struct selector_key *key) {
     struct transformation *t = &ATTACHMENT(key)->t;
     static int a=0;
