@@ -183,6 +183,7 @@ struct response_st {
     struct response_parser response_parser;
 
     bool response_parser_initialized;
+    bool end;
 };
 
 /** usado por TRANSFORMATION */
@@ -222,6 +223,7 @@ struct transformation {
     bool done;
     double client_remaining;
     size_t send_to_son;
+    bool end;
 };
 
 /*
@@ -841,7 +843,7 @@ request_write(struct selector_key *key) {
 
         if (!buffer_can_read(b)) {
             if (d->status == status_succeeded) {
-                if (d->request.content_length == 0) {
+                if (d->request.content_length == 0 || d->request.method==http_method_HEAD) {
                     ret = RESPONSE;
                     selector_set_interest_key(key, OP_READ);
                 } else {
@@ -855,11 +857,7 @@ request_write(struct selector_key *key) {
                     ret = COPY;
 
                 }
-//                ret = COPY;
-//                selector_set_interest(key->s, *d->client_fd, OP_READ);
-                // selector_set_interest_key(key, OP_NOOP);
-                // selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_READ);
-//                selector_set_interest(key->s, *d->origin_fd, OP_READ);
+
             } else {
                 ret = DONE;
                 selector_set_interest(key->s, *d->client_fd, OP_NOOP);
@@ -991,53 +989,13 @@ copy_w(struct selector_key *key) {
     }
     return ret;
 }
-//    struct copy *d = copy_ptr(key);
-//
-//    assert(*d->fd == key->fd);
-//    size_t size;
-//    ssize_t n;
-//    buffer *b = d->wb;
-//    unsigned ret = COPY;
-//
-//    uint8_t *ptr = buffer_read_ptr(b, &size);
-//    n = send(key->fd, ptr, size, MSG_NOSIGNAL);
-//    if (n == -1) {
-//        shutdown(*d->fd, SHUT_WR);
-//        d->duplex &= ~OP_WRITE;
-//        if (*d->other->fd != -1) {
-//            shutdown(*d->other->fd, SHUT_RD);
-//            d->other->duplex &= ~OP_READ;
-//        }
-//    } else {
-//        /* Metrics Start. */
-//        metrstr->transfby->tfbyt_ll += n;
-//        /* Metrics end.   */
-//
-//        buffer_read_adv(b, n);
-//    }
-//    copy_compute_interests(key->s, d);
-//    copy_compute_interests(key->s, d->other);
-//    if (d->duplex == OP_NOOP) {
-//        ret = DONE;
-//    }
-//    return ret;
-//}
 
 
 ////////////////////////////////////////////////////////////////////////////////
 // RESPONSE
 ////////////////////////////////////////////////////////////////////////////////
 
-enum http_state response_process(struct selector_key *key, struct response_st *d);
 
-//void set_request(struct response_st *d, struct http_request *request) {
-//    if (request == NULL) {
-//        fprintf(stderr, "Request is NULL");
-//        abort();
-//    }
-//    d->request = request;
-//    d->response_parser.request = request;
-//}
 
 void
 response_init(const unsigned state, struct selector_key *key) {
@@ -1078,10 +1036,12 @@ response_read(struct selector_key *key) {
     uint8_t *ptr;
     size_t count;
     ssize_t n;
-
+    buffer aux;
+    char aux_buffer[BUFFER_SIZE];
     ptr = buffer_write_ptr(b, &count);
     // Some bytes reserved to the modification of the headers and chunks management
     n = recv(key->fd, ptr, count - 100, 0);
+    bool transform;
 
     if (n > 0 || buffer_can_read(b)) {
         buffer_write_adv(b, n);
@@ -1104,77 +1064,91 @@ response_read(struct selector_key *key) {
 
                     if (d->response_parser.response->transfer_enconding_chunked) {
 
-//                        ATTACHMENT(key)->chunk_activated = true;
+                        ATTACHMENT(key)->chunk_activated = true;
 
-//                        // Decoding Chunked
-//                        unsigned long length = 0;
-//
-//                        unsigned long chunk_size = 0;
-//                        char chunk_size_arr[12] = {0};
-//                        int chunk_size_ptr = 0;
-//
-//                        // read chunk-size
-//                        while (buffer_can_read(b)) {
-//                            const uint8_t c = buffer_read(b);
-//
-//                            if( c == '\r') {
-//                                break;
-//                            } else {
-//                                chunk_size_arr[chunk_size_ptr++] = c;
-//                            }
-//
-//                        }
-//
-//                        // read LF
-//                        buffer_read(b);
-//
-//                        chunk_size = strtoul(chunk_size_arr, NULL, 16);
-//                        memset(chunk_size_arr, 0 ,strlen(chunk_size_arr));
-//                        chunk_size_ptr = 0;
-//
-//                        while (chunk_size > 0) {
-//                            // read chunk-size
-//                            // read chunk-data and CRLF
-//                            while (buffer_can_read(b)) {
-//                                const uint8_t c = buffer_read(b);
-//
-//                                if( c == '\r') {
-//                                    break;
-//                                } else {
-//                                    buffer_write(b, c);
-//                                }
-//
-//                            }
-//
-//                            // read LF
-//                            buffer_read(b);
-//
-//                            length = length + chunk_size;
-//
-//                            // read chunk-size, chunk-ext (if any), and CRLF
-//                            while (buffer_can_read(b)) {
-//                                const uint8_t c = buffer_read(b);
-//
-//                                if( c == '\r') {
-//                                    break;
-//                                } else {
-//                                    chunk_size_arr[chunk_size_ptr++] = c;
-//                                }
-//
-//                            }
-//
-//                            // read LF
-//                            buffer_read(b);
-//
-//                            chunk_size = strtoul(chunk_size_arr, NULL, 16);
-//                            memset(chunk_size_arr, 0 ,strlen(chunk_size_arr));
-//                            chunk_size_ptr = 0;
-//
-//                        }
-//
-//                        d->response_parser.response->content_length = length;
-//
-//                        //read last CRLF
+                        // Decoding Chunked
+                        unsigned long length = 0;
+
+                        unsigned long chunk_size = 0;
+                        char chunk_size_arr[12] = {0};
+                        int chunk_size_ptr = 0;
+                        // read chunk-size
+                        while (buffer_can_read(b)) {
+                            const uint8_t c = buffer_read(b);
+
+                            if( c == '\r') {
+                                break;
+                            } else {
+                                chunk_size_arr[chunk_size_ptr++] = c;
+                            }
+
+                        }
+
+                        // read LF
+                        buffer_read(b);
+
+                        buffer_init(&aux, N(aux_buffer), aux_buffer);
+                        chunk_size = strtoul(chunk_size_arr, NULL, 16);
+                        memset(chunk_size_arr, 0 ,strlen(chunk_size_arr));
+                        chunk_size_ptr = 0;
+                        transform=false;
+                        if(chunk_size>0){
+                            d->end=false;
+                        } else{
+                            d->end=true;
+                        }
+
+                        while (buffer_can_read(b)) {
+                            uint8_t c;
+                            // read chunk-size
+                            // read chunk-data and CRLF
+                            while (buffer_can_read(b)) {
+                                c = buffer_read(b);
+
+                                if( c == '\r') {
+                                    transform=true;
+                                    break;
+                                } else {
+                                    buffer_write(&aux, c);
+                                }
+
+                            }
+
+                            // read LF
+                            if(transform) {
+                                c = buffer_read(b);
+                                if(c!='\n')
+                                    transform=false;
+                            }
+                            length = length + chunk_size;
+
+                            // read chunk-size, chunk-ext (if any), and CRLF
+                            while (buffer_can_read(b)) {
+                                const uint8_t c = buffer_read(b);
+
+                                if( c == '\r') {
+                                    break;
+                                } else {
+                                    chunk_size_arr[chunk_size_ptr++] = c;
+                                }
+
+                            }
+
+                            // read LF
+                            buffer_read(b);
+                            if(transform) {
+                                chunk_size = strtoul(chunk_size_arr, NULL, 16);
+                                memset(chunk_size_arr, 0, strlen(chunk_size_arr));
+                                chunk_size_ptr = 0;
+                                if(chunk_size==0){
+                                    d->end=true;
+                                }
+                            }
+                        }
+                        buffer_reset(b);
+                        write_buffer_buffer(b,&aux);
+                        ATTACHMENT(key)->content_length = length;
+                        //read last CRLF
 //                        buffer_read(b);
 //                        buffer_read(b);
 
@@ -1379,7 +1353,7 @@ transformation_init(const unsigned state, struct selector_key *key) {
     t->error_rd = false;
 
     t->chunked_activated = ATTACHMENT(key)->orig.response.response_parser.response->transfer_enconding_chunked;
-
+    t->end=ATTACHMENT(key)->orig.response.end;
     t->done = false;
     buffer *b2 = t->rb;
     size_t count2;
@@ -1421,6 +1395,7 @@ transformation_read(struct selector_key *key) {
     size_t count;
     ssize_t n;
 
+    bool transform;
     ptr = buffer_write_ptr(b, &count);
     n = recv(*t->origin_fd, ptr, count, 0);
     t->content_length -= n;
@@ -1430,10 +1405,65 @@ transformation_read(struct selector_key *key) {
 
 
         if (t->chunked_activated) {
+            buffer aux;
+            char aux_buffer[BUFFER_SIZE];
+            unsigned long length = 0;
+            buffer_init(&aux, N(aux_buffer), aux_buffer);
 
-            // Dechunkear
-            // Set Content-Length
-            char c = 0;
+            unsigned long chunk_size = 0;
+            char chunk_size_arr[12] = {0};
+            int chunk_size_ptr = 0;
+            while (buffer_can_read(b)) {
+                uint8_t c;
+                // read chunk-size
+                // read chunk-data and CRLF
+                while (buffer_can_read(b)) {
+                    c = buffer_read(b);
+
+                    if( c == '\r') {
+                        transform=true;
+                        break;
+                    } else {
+                        buffer_write(&aux, c);
+                    }
+
+                }
+
+                // read LF
+                if(transform) {
+                    c = buffer_read(b);
+                    if(c!='\n')
+                        transform=false;
+                }
+                length = length + chunk_size;
+
+                // read chunk-size, chunk-ext (if any), and CRLF
+                while (buffer_can_read(b)) {
+                    const uint8_t c = buffer_read(b);
+
+                    if( c == '\r') {
+                        break;
+                    } else {
+                        chunk_size_arr[chunk_size_ptr++] = c;
+                    }
+
+                }
+
+                // read LF
+                buffer_read(b);
+                if(transform) {
+                    chunk_size = strtoul(chunk_size_arr, NULL, 16);
+                    memset(chunk_size_arr, 0, strlen(chunk_size_arr));
+                    chunk_size_ptr = 0;
+                    if(chunk_size==0){
+                        t->done=true;
+                    }
+                }
+            }
+            buffer_reset(b);
+            write_buffer_buffer(b,&aux);
+            t->read_bytes_remaining+=length;
+            t->client_remaining+=length;
 
         }
 
@@ -1455,9 +1485,6 @@ static unsigned
 transformation_write(struct selector_key *key) {
     struct transformation *et = &ATTACHMENT(key)->t;
     enum http_state ret = TRANSFORMATION;
-    if (et->done) {
-        return DONE;
-    }
     buffer *b = et->wb;
     uint8_t *ptr;
     size_t count;
@@ -1480,7 +1507,7 @@ transformation_write(struct selector_key *key) {
             selector_set_interest(key->s, *et->client_fd, OP_NOOP);
             return ret;
         } else {
-            if (et->content_length > 0) {
+            if ((et->chunked_activated==false && et->content_length > 0) || (et->chunked_activated && et->done==false)) {
                 selector_set_interest(key->s, *et->transf_write_fd, OP_NOOP);
                 selector_set_interest(key->s, *et->origin_fd, OP_READ);
                 selector_set_interest(key->s, *et->client_fd, OP_NOOP);
@@ -1490,7 +1517,7 @@ transformation_write(struct selector_key *key) {
                 selector_set_interest(key->s, *et->client_fd, OP_NOOP);
                 selector_set_interest(key->s, *et->transf_read_fd, OP_READ);
                 return ret;
-            } else {
+            } else{
                 return DONE;
             }
         }
@@ -1538,6 +1565,7 @@ void transf_read(struct selector_key *key) {
         buffer_write_adv(b, n);
         selector_set_interest(key->s, *t->client_fd, OP_WRITE);
     }
+
 }
 
 void transf_write(struct selector_key *key) {
