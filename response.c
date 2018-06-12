@@ -217,7 +217,7 @@ LF_after_header_value_content_length(const uint8_t c, struct response_parser *p)
 }
 
 static enum response_state
-parse_content_length(const uint8_t c, struct response_parser *p) {
+parse_content_length(const uint8_t c, struct response_parser *p, buffer *accum) {
     enum response_state next;
 
     if (!p->response->content_length_present && (c == ' ' || c == '\t')) {
@@ -232,6 +232,17 @@ parse_content_length(const uint8_t c, struct response_parser *p) {
         if (!p->response->content_length_present) {
             return response_error; //todo: MISSING LENGTH
         } else {
+
+            if (p->response->method == http_method_HEAD) {
+                write_buffer_string(accum, "Content-Length: ");
+
+                char str[12] = "";
+                snprintf(str, sizeof str, "%zu", p->response->content_length);
+
+                write_buffer_string(accum, str);
+                write_buffer_string(accum, "\r\n");
+            }
+
             return response_LF_after_header_value_content_length;
         }
     }
@@ -269,13 +280,6 @@ parse_content_type(const uint8_t c, struct response_parser *p) {
         }
     }
 
-//    if ((strchr("!#$%&'*+-.^_`|~", c) == NULL && !isdigit(c) && !isalpha(c) && c != '/' && c != ';' && c != ' ' && c != '\t')) {
-//        memset(p->content_type_medias, '\0', MAX_HEADER_FIELD_NAME_SIZE);
-//        next = response_error;
-//        p->i = 0;
-//        return next;
-//    }
-
     if ((int) p->i == MAX_HEADER_FIELD_NAME_SIZE) {
         memset(p->content_type_medias, '\0', MAX_HEADER_FIELD_NAME_SIZE);
         next = response_error;
@@ -290,11 +294,51 @@ parse_content_type(const uint8_t c, struct response_parser *p) {
 }
 
 static enum response_state
+parse_content_encoding(const uint8_t c, struct response_parser *p) {
+    enum response_state next;
+
+    if (strlen(p->header_field_value) == 0 && c == ' ' || c == '\t') {
+        return response_parse_content_encoding;
+    }
+
+    if (p->http_sub_parser == NULL) {
+        d = parser_utils_strcmpi("gzip");
+        p->http_sub_parser = parser_init(parser_no_classes(), &d);
+    }
+
+    switch (parser_feed(p->http_sub_parser, c)->type) {
+        case STRING_CMP_MAYEQ:
+            next = response_parse_content_encoding;
+            break;
+        case STRING_CMP_EQ:
+            parser_utils_strcmpi_destroy(p->http_sub_parser->def);
+            parser_destroy(p->http_sub_parser);
+            next = response_CR_after_header_value;
+            p->http_sub_parser = NULL;
+            p->response->content_enconding_gzip = true;
+            break;
+        case STRING_CMP_NEQ:
+        default:
+            parser_utils_strcmpi_destroy(p->http_sub_parser->def);
+            parser_destroy(p->http_sub_parser);
+            next = response_header_value;
+            break;
+    }
+
+    return next;
+
+}
+
+static enum response_state
 header_field_name(const uint8_t c, struct response_parser *p, buffer *accum) {
     enum response_state next;
 
     // If CRLF is found, headers field are over and this is the Empty Line.
     if (strlen(p->header_field_name) == 0 && c == '\r') {
+
+        if (p->response->method == http_method_HEAD || p->response->method == http_method_GET) {
+            write_buffer_string(accum, "Connection: close\r\n");
+        }
 
         buffer_write(accum, '\r');
 
@@ -315,7 +359,10 @@ header_field_name(const uint8_t c, struct response_parser *p, buffer *accum) {
             memset(p->header_field_name, '\0', MAX_HEADER_FIELD_NAME_SIZE);
             next = response_parse_content_length;
 
-            write_buffer_string(accum, "Transfer-Encoding: chunked\r\n");
+            if (p->response->method != http_method_HEAD) {
+                write_buffer_string(accum, "Transfer-Encoding: chunked\r\n");
+            }
+
 
         } else {
 
@@ -324,6 +371,9 @@ header_field_name(const uint8_t c, struct response_parser *p, buffer *accum) {
 
             } else if (strcmp(aux, "content-type") == 0) {
                 next = response_parse_content_type;
+
+            } else if (strcmp(aux, "content-encoding") == 0) {
+                next = response_parse_content_encoding;
 
             } else {
                 next = response_header_value;
@@ -336,7 +386,6 @@ header_field_name(const uint8_t c, struct response_parser *p, buffer *accum) {
 
         }
 
-//        memset(aux, '\0', sizeof(aux));
         free(aux);
 
         return next;
@@ -367,7 +416,7 @@ header_field_value(const uint8_t c, struct response_parser *p) {
 
     if (c == '\r') {
         p->i = 0;
-        memset(p->header_field_name, '\0', sizeof(MAX_HEADER_FIELD_NAME_SIZE));
+        memset(p->header_field_name, '\0', MAX_HEADER_FIELD_NAME_SIZE);
         return response_LF_after_header_value;
     }
 
@@ -377,7 +426,7 @@ header_field_value(const uint8_t c, struct response_parser *p) {
 
     if ((int) p->i == MAX_HEADER_FIELD_NAME_SIZE) {
         //TODO: too long header field specific error?
-        memset(p->header_field_name, '\0', sizeof(MAX_HEADER_FIELD_NAME_SIZE));
+        memset(p->header_field_name, '\0', MAX_HEADER_FIELD_NAME_SIZE);
         next = response_error;
         p->i = 0;
         return next;
@@ -451,10 +500,13 @@ response_parser_feed(struct response_parser *p, const uint8_t c, buffer *accum) 
             next = parse_transfer_encoding(c, p);
             break;
         case response_parse_content_length:
-            next = parse_content_length(c, p);
+            next = parse_content_length(c, p, accum);
             break;
         case response_parse_content_type:
             next = parse_content_type(c, p);
+            break;
+        case response_parse_content_encoding:
+            next = parse_content_encoding(c, p);
             break;
         case response_header_value:
             next = header_field_value(c, p);
@@ -466,7 +518,7 @@ response_parser_feed(struct response_parser *p, const uint8_t c, buffer *accum) 
             next = LF_after_header_value(c, p);
             break;
         case response_LF_after_header_value_content_length:
-            next = LF_after_header_value_content_length(c,p);
+            next = LF_after_header_value_content_length(c, p);
             break;
         case response_empty_line_waiting_for_LF:
             next = empty_line_waiting_for_LF(c, p);
@@ -494,11 +546,11 @@ response_is_done(const enum response_state st, bool *errored) {
 }
 
 extern enum response_state
-response_consume(buffer *b, struct response_parser *p, bool *errored, buffer *accum, ssize_t * bytesRead) {
+response_consume(buffer *b, struct response_parser *p, bool *errored, buffer *accum, ssize_t *bytesRead) {
     enum response_state st = p->state;
 
     // Return if response headers are already parsed
-    if(st == response_done) {
+    if (st == response_done) {
         return st;
     }
 

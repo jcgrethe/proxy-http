@@ -504,6 +504,24 @@ request_read(struct selector_key *key) {
     if (n > 0) {
         buffer_write_adv(b, n);
         int st = request_consume(b, &d->parser, &error, &d->accum);
+        if (st > request_done) {
+            //Error
+            switch (st) {
+                case request_error_unsupported_method:
+                    write_buffer_string(d->wb, HTTP_CODE_501);
+                    break;
+                case request_error:
+                    write_buffer_string(d->wb, HTTP_CODE_400);
+                    break;
+                default:
+                    write_buffer_string(d->wb, HTTP_CODE_500);
+
+            }
+            selector_status s = 0;
+            s |= selector_set_interest(key->s, *d->client_fd, OP_WRITE);
+            ret = SELECTOR_SUCCESS == s ? REQUEST_WRITE : ERROR;
+            return ret;
+        }
         if (request_is_done(st, 0)) {
             ret = request_process(key, d);
 //            if (strlen(d->request.host) != 0) {
@@ -681,6 +699,7 @@ request_connect(struct selector_key *key, struct request_st *d) {
     bool error = false;
     // da legibilidad
     enum response_status status = d->status;
+
     int *fd = d->origin_fd;
     *fd = socket(ATTACHMENT(key)->origin_domain, SOCK_STREAM, 0);
     if (*fd == -1) {
@@ -711,7 +730,13 @@ request_connect(struct selector_key *key, struct request_st *d) {
             }
             ATTACHMENT(key)->references += 1;
         } else {
-//            status = errno_to_socks(errno);
+            //Couldn't connect
+            write_buffer_string(d->wb, HTTP_CODE_503);
+            selector_status s = 0;
+            s |= selector_set_interest(key->s, *d->client_fd, OP_WRITE);
+            int ret = SELECTOR_SUCCESS == s ? REQUEST_WRITE : ERROR;
+//            return ret;
+
             error = true;
             goto finally;
         }
@@ -820,7 +845,19 @@ request_write(struct selector_key *key) {
                     selector_set_interest_key(key, OP_READ);
                 } else {
                     ret = COPY;
+
                     selector_set_interest_key(key, OP_NOOP);
+                    if(buffer_can_read(d->rb)) {
+
+                        selector_set_interest(key->s, *d->origin_fd, OP_WRITE);
+
+                    } else {
+
+                        selector_set_interest(key->s, *d->client_fd, OP_READ);
+
+                    }
+
+
                 }
 //                ret = COPY;
 //                selector_set_interest(key->s, *d->client_fd, OP_READ);
@@ -854,7 +891,6 @@ copy_init(const unsigned state, struct selector_key *key) {
     d->origin_fd = &ATTACHMENT(key)->origin_fd;
     d->rb = &(ATTACHMENT(key)->read_buffer);
     d->wb = &(ATTACHMENT(key)->write_buffer);
-    selector_set_interest(key->s, *d->client_fd, OP_READ);
 }
 
 /** lee bytes de un socket y los encola para ser escritos en otro socket */
@@ -872,6 +908,7 @@ copy_r(struct selector_key *key) {
     if (n > 0) {
         buffer_write_adv(b, n);
         selector_set_interest(key->s, *d->origin_fd, OP_WRITE);
+        selector_set_interest(key->s, *d->client_fd, OP_NOOP);
     } else {
         return ERROR;
     }
@@ -904,11 +941,12 @@ copy_r(struct selector_key *key) {
 static unsigned
 copy_w(struct selector_key *key) {
     struct request_st *d = &ATTACHMENT(key)->client.request;
-    buffer *b = d->wb;
+    buffer *b = d->rb;
     uint8_t *ptr;
     size_t count;
     ssize_t n;
 
+    ptr = buffer_read_ptr(b, &count);
     n = send(key->fd, ptr, count, MSG_NOSIGNAL);
     buffer_read_adv(b, n);
     if (n == -1) {
@@ -982,6 +1020,9 @@ response_init(const unsigned state, struct selector_key *key) {
     if (!d->response_parser_initialized) {
         response_parser_init(&d->response_parser);
         d->response_parser_initialized = true;
+
+        d->response_parser.response->method = ATTACHMENT(key)->client.request.request.method;
+
     } else {
 
         d->response_parser.state = ATTACHMENT(key)->orig.aux_response_state;
@@ -1010,7 +1051,7 @@ response_read(struct selector_key *key) {
 
     ptr = buffer_write_ptr(b, &count);
     // Some bytes reserved to the modification of the headers and chunks management
-    n = recv(key->fd, ptr, count-100, 0);
+    n = recv(key->fd, ptr, count - 100, 0);
 
     if (n > 0 || buffer_can_read(b)) {
         buffer_write_adv(b, n);
@@ -1019,11 +1060,11 @@ response_read(struct selector_key *key) {
         if (st == response_done) {
 
             if (strcmp(parameters->command, DEFAULT_COMMAND) != 0 &&
-                strcmp(parameters->media_types_input, DEFAULT_MEDIA_TYPES_RANGES) != 0){
+                strcmp(parameters->media_types_input, DEFAULT_MEDIA_TYPES_RANGES) != 0 &&
+                !d->response_parser.response->content_enconding_gzip) {
 
                 if (d->response_parser.response->status_code == 200
                     && d->response_parser.response->method != http_method_HEAD) {
-
 
                     uint8_t *ptr;
                     size_t count;
@@ -1032,7 +1073,79 @@ response_read(struct selector_key *key) {
 
                     if (d->response_parser.response->transfer_enconding_chunked) {
 
-                        ATTACHMENT(key)->chunk_activated = true;
+//                        ATTACHMENT(key)->chunk_activated = true;
+
+//                        // Decoding Chunked
+//                        unsigned long length = 0;
+//
+//                        unsigned long chunk_size = 0;
+//                        char chunk_size_arr[12] = {0};
+//                        int chunk_size_ptr = 0;
+//
+//                        // read chunk-size
+//                        while (buffer_can_read(b)) {
+//                            const uint8_t c = buffer_read(b);
+//
+//                            if( c == '\r') {
+//                                break;
+//                            } else {
+//                                chunk_size_arr[chunk_size_ptr++] = c;
+//                            }
+//
+//                        }
+//
+//                        // read LF
+//                        buffer_read(b);
+//
+//                        chunk_size = strtoul(chunk_size_arr, NULL, 16);
+//                        memset(chunk_size_arr, 0 ,strlen(chunk_size_arr));
+//                        chunk_size_ptr = 0;
+//
+//                        while (chunk_size > 0) {
+//                            // read chunk-size
+//                            // read chunk-data and CRLF
+//                            while (buffer_can_read(b)) {
+//                                const uint8_t c = buffer_read(b);
+//
+//                                if( c == '\r') {
+//                                    break;
+//                                } else {
+//                                    buffer_write(b, c);
+//                                }
+//
+//                            }
+//
+//                            // read LF
+//                            buffer_read(b);
+//
+//                            length = length + chunk_size;
+//
+//                            // read chunk-size, chunk-ext (if any), and CRLF
+//                            while (buffer_can_read(b)) {
+//                                const uint8_t c = buffer_read(b);
+//
+//                                if( c == '\r') {
+//                                    break;
+//                                } else {
+//                                    chunk_size_arr[chunk_size_ptr++] = c;
+//                                }
+//
+//                            }
+//
+//                            // read LF
+//                            buffer_read(b);
+//
+//                            chunk_size = strtoul(chunk_size_arr, NULL, 16);
+//                            memset(chunk_size_arr, 0 ,strlen(chunk_size_arr));
+//                            chunk_size_ptr = 0;
+//
+//                        }
+//
+//                        d->response_parser.response->content_length = length;
+//
+//                        //read last CRLF
+//                        buffer_read(b);
+//                        buffer_read(b);
 
                     } else {
 
@@ -1055,19 +1168,30 @@ response_read(struct selector_key *key) {
                         printf("Doesnt Match Media Types!");
                     }
 
-
-//                return ss == SELECTOR_SUCCESS ? TRANSFORMATION : ERROR;
-//
                 }
+            }
+
+            if (d->response_parser.response->method == http_method_HEAD) {
+
+                selector_status ss = SELECTOR_SUCCESS;
+                ss |= selector_set_interest_key(key, OP_NOOP);
+                ss |= selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_WRITE);
+                return ss == SELECTOR_SUCCESS ? RESPONSE : ERROR;
+
             }
 
 
             if (d->response_parser.response->transfer_enconding_chunked) {
-
+                write_buffer_buffer(d->wb, b);
+                selector_status ss = SELECTOR_SUCCESS;
+                ss |= selector_set_interest_key(key, OP_NOOP);
+                ss |= selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_WRITE);
+                return ss == SELECTOR_SUCCESS ? RESPONSE : ERROR;
 
             } else if (d->response_parser.response->content_length_present) {
 
-                char chunk_size[12]={0};
+
+                char chunk_size[12] = {0};
                 sprintf(chunk_size, "%X\r\n", (unsigned int) n);
                 write_buffer_string(d->wb, chunk_size);
                 write_buffer_buffer(d->wb, b);
@@ -1086,9 +1210,14 @@ response_read(struct selector_key *key) {
                     return ss == SELECTOR_SUCCESS ? RESPONSE : ERROR;
                 }
 
+
             } else {
 
-                return response_error; //TODO: No Content-length or TEnconding present
+                // No body
+                selector_status ss = SELECTOR_SUCCESS;
+                ss |= selector_set_interest_key(key, OP_NOOP);
+                ss |= selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_WRITE);
+                return ss == SELECTOR_SUCCESS ? RESPONSE : ERROR;
 
             }
 
@@ -1132,21 +1261,16 @@ response_write(struct selector_key *key) {
     } else {
         buffer_read_adv(b, n);
 
-//      Control content length not exceeded
-//        d->response_parser.response->content_length = (int) (d->response_parser.response->content_length - n);
-//
-//        if (d->response_parser.response->content_length == 0) {
-//            ret = RESPONSE;
-//        } else if (d->response_parser.response->content_length < 0) {
-//            // Exceded Content Length
-//            ret = ERROR;
-//        }
-
-
         if (!buffer_can_read(b)) {
-//            if (d->response_parser.state != response_done) {
-            if (d->response_parser.response->content_length == 0)
+
+            if (d->response_parser.response->content_length == 0 && d->response_parser.response->content_length_present)
                 return DONE;
+
+            if (d->response_parser.response->method == http_method_HEAD) {
+
+                return DONE;
+            }
+
             selector_status ss = SELECTOR_SUCCESS;
             ss |= selector_set_interest_key(key, OP_NOOP);
             ss |= selector_set_interest(key->s, ATTACHMENT(key)->origin_fd, OP_READ);
@@ -1157,7 +1281,8 @@ response_write(struct selector_key *key) {
 //                ret = response_process(key, d);
 //                ret = DONE;
 //            }
-
+//            ret = DONE;
+//            ret = RESPONSE;
         } else {
             selector_status ss = SELECTOR_SUCCESS;
             ss |= selector_set_interest_key(key, OP_NOOP);
@@ -1227,20 +1352,21 @@ transformation_init(const unsigned state, struct selector_key *key) {
     t->error_wr = false;
     t->error_rd = false;
 
-    t->chunked_activated = ATTACHMENT(key)->chunk_activated;
-    t->done=false;
+    t->chunked_activated = ATTACHMENT(key)->orig.response.response_parser.response->transfer_enconding_chunked;
+
+    t->done = false;
     buffer *b2 = t->rb;
     size_t count2;
     buffer_read_ptr(b2, &count2);
-    t->content_length = ATTACHMENT(key)->content_length-count2;
-    t->client_remaining=ATTACHMENT(key)->content_length;
-    t->send_to_son=count2;
+    t->content_length = ATTACHMENT(key)->content_length - count2;
+    t->client_remaining = ATTACHMENT(key)->content_length;
+    t->send_to_son = count2;
     t->did_write = false;
     t->write_error = false;
 
     t->send_bytes_write = 0;
     t->send_bytes_read = 0;
-    printf("initial lenght:%lf\n",t->content_length);
+    printf("initial lenght:%lf\n", t->content_length);
     t->status = start_transformation(key);
 
     buffer *b = t->wb;
@@ -1271,20 +1397,17 @@ transformation_read(struct selector_key *key) {
 
     ptr = buffer_write_ptr(b, &count);
     n = recv(*t->origin_fd, ptr, count, 0);
-    t->content_length-=n;
-    printf("Origin Receive: %d\n",n);
+    t->content_length -= n;
+    printf("Origin Receive: %d\n", n);
     if (n > 0) {
         buffer_write_adv(b, n);
 
 
-        if (!t->chunked_activated) {
-
-//            t->read_bytes_remaining = t->read_bytes_remaining - n;
-
-        } else {
+        if (t->chunked_activated) {
 
             // Dechunkear
             // Set Content-Length
+            char c = 0;
 
         }
 
@@ -1294,6 +1417,10 @@ transformation_read(struct selector_key *key) {
     } else if (n == -1) {
         ret = ERROR;
     }
+    if (n == 0) {
+        selector_set_interest(key->s, *t->transf_write_fd, OP_WRITE);
+        selector_set_interest(key->s, *t->origin_fd, OP_NOOP);
+    }
 
     return ret;
 }
@@ -1302,7 +1429,7 @@ static unsigned
 transformation_write(struct selector_key *key) {
     struct transformation *et = &ATTACHMENT(key)->t;
     enum http_state ret = TRANSFORMATION;
-    if(et->done){
+    if (et->done) {
         return DONE;
     }
     buffer *b = et->wb;
@@ -1322,7 +1449,7 @@ transformation_write(struct selector_key *key) {
     send(*et->client_fd, "\r\n", 2, MSG_NOSIGNAL);
     if (n >= 0) {
         buffer_read_adv(b, n);
-        if(et->read_bytes_remaining>0){
+        if (et->read_bytes_remaining > 0) {
             selector_set_interest(key->s, *et->transf_write_fd, OP_WRITE);
             selector_set_interest(key->s, *et->client_fd, OP_NOOP);
             return ret;
@@ -1332,12 +1459,12 @@ transformation_write(struct selector_key *key) {
                 selector_set_interest(key->s, *et->origin_fd, OP_READ);
                 selector_set_interest(key->s, *et->client_fd, OP_NOOP);
                 return ret;
-            } else if (et->client_remaining!=0) {
+            } else if (et->client_remaining != 0) {
                 selector_set_interest(key->s, *et->origin_fd, OP_NOOP);
                 selector_set_interest(key->s, *et->client_fd, OP_NOOP);
                 selector_set_interest(key->s, *et->transf_read_fd, OP_READ);
                 return ret;
-            } else{
+            } else {
                 return DONE;
             }
         }
@@ -1352,7 +1479,7 @@ static void
 transformation_close(const unsigned state, struct selector_key *key) {
 
     struct transformation *et = &ATTACHMENT(key)->t;
-    send(*et->client_fd,"0\r\n\r\n", 5, MSG_NOSIGNAL);
+    send(*et->client_fd, "0\r\n\r\n", 5, MSG_NOSIGNAL);
     struct transformation *t = &ATTACHMENT(key)->t;
     selector_unregister_fd(key->s, *t->transf_read_fd);
     close(*t->transf_read_fd);
@@ -1366,7 +1493,7 @@ transformation_close(const unsigned state, struct selector_key *key) {
 
 void transf_read(struct selector_key *key) {
     struct transformation *t = &ATTACHMENT(key)->t;
-    static int aux=0;
+    static int aux = 0;
     buffer *b = t->transf_rb;
     uint8_t *ptr;
     size_t count;
@@ -1374,10 +1501,11 @@ void transf_read(struct selector_key *key) {
 
     ptr = buffer_write_ptr(b, &count);
     n = read(*t->transf_read_fd, ptr, count);
-    aux+=n;
-    t->client_remaining-=n;
-    printf("receive:%d\n",aux);
+    aux += n;
+    t->client_remaining -= n;
+    printf("receive:%d\n", aux);
     if (n < 0) {
+        buffer_write_adv(b, n);
         selector_set_interest(key->s, *t->client_fd, OP_WRITE);
         selector_set_interest(key->s, *t->transf_write_fd, OP_NOOP);
     } else if (n > 0) {
@@ -1386,10 +1514,9 @@ void transf_read(struct selector_key *key) {
     }
 }
 
-
 void transf_write(struct selector_key *key) {
     struct transformation *t = &ATTACHMENT(key)->t;
-    static int a=0;
+    static int a = 0;
     buffer *b = t->transf_wb;
     uint8_t *ptr;
     size_t count;
@@ -1397,9 +1524,9 @@ void transf_write(struct selector_key *key) {
     ptr = buffer_read_ptr(b, &count);
     size_t bytes_sent = count;
     n = write(*t->transf_write_fd, ptr, bytes_sent);
-    a+=n;
-    printf("send: %d\n",a);
-    t->read_bytes_remaining=count-n;
+    a += n;
+    printf("send: %d\n", a);
+    t->read_bytes_remaining = count - n;
     if (n > 0) {
         buffer_read_adv(b, n);
         selector_set_interest(key->s, *t->transf_read_fd, OP_READ);
@@ -1429,9 +1556,12 @@ start_transformation(struct selector_key *key) {
 
     pid_t pid;
     char *args[4];
+    args[2] = calloc(1, 30);
     args[0] = "bash";
     args[1] = "-c";
-    args[2] =parameters->command;
+//    strcat(args[2],"stdbuf -o0 ");
+    //   strcat(args[2],parameters->command);
+    args[2] = parameters->command;
     args[3] = NULL;
 
     int fd_read[2];
