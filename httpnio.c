@@ -1352,7 +1352,8 @@ transformation_init(const unsigned state, struct selector_key *key) {
     t->error_wr = false;
     t->error_rd = false;
 
-    t->chunked_activated = ATTACHMENT(key)->chunk_activated;
+    t->chunked_activated = ATTACHMENT(key)->orig.response.response_parser.response->transfer_enconding_chunked;
+
     t->done = false;
     buffer *b2 = t->rb;
     size_t count2;
@@ -1406,6 +1407,7 @@ transformation_read(struct selector_key *key) {
 
             // Dechunkear
             // Set Content-Length
+            char c = 0;
 
         }
 
