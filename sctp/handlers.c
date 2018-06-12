@@ -148,6 +148,12 @@ int handleHelp(){
   printf("        [Access]        \n\n");
   printf("login  [username][password].\n\n");
 
+  printf("        [Configurations]        \n\n");
+  printf("config  [transform | mediatypes [ARGS] | command [ARG]].\n\n");
+  printf("   - config transform                   Activate/Desactivated Transformations.\n");
+  printf("   - config mediatypes [ARGS]           Set a list of media-types.\n");  
+  printf("   - config command [ARG]               Set a command for transformations.\n");
+
   printf("        [Metrics]        \n\n");
   printf("metric [NONE] | [currcon | histacc | trabytes | connsucc].\n");
   printf("   - metric            Shows all metrics.\n");
@@ -158,7 +164,7 @@ int handleHelp(){
 
   printf("        [System]        \n\n");
   printf("help [NONE].\n");
-  printf("exit [NONE].\n");
+  printf("exit [NONE].\n\n\n");
   return 0;
 }
 
