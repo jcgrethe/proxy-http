@@ -307,7 +307,7 @@ header_field_name(const uint8_t c, struct response_parser *p, buffer *accum) {
     // If CRLF is found, headers field are over and this is the Empty Line.
     if (strlen(p->header_field_name) == 0 && c == '\r') {
 
-        if (p->response->method == http_method_HEAD) {
+        if (p->response->method == http_method_HEAD || p->response->method == http_method_GET) {
             write_buffer_string(accum, "Connection: close\r\n");
         }
 

@@ -504,14 +504,17 @@ request_read(struct selector_key *key) {
     if (n > 0) {
         buffer_write_adv(b, n);
         int st = request_consume(b, &d->parser, &error, &d->accum);
-        if(st > request_done){
+        if (st > request_done) {
             //Error
-            switch (st){
-                case request_error_unsupported_method: write_buffer_string(d->wb, HTTP_CODE_501);
+            switch (st) {
+                case request_error_unsupported_method:
+                    write_buffer_string(d->wb, HTTP_CODE_501);
                     break;
-                case request_error: write_buffer_string(d->wb, HTTP_CODE_400);
-                break;
-                default: write_buffer_string(d->wb, HTTP_CODE_500);
+                case request_error:
+                    write_buffer_string(d->wb, HTTP_CODE_400);
+                    break;
+                default:
+                    write_buffer_string(d->wb, HTTP_CODE_500);
 
             }
             selector_status s = 0;
@@ -1083,6 +1086,15 @@ response_read(struct selector_key *key) {
                 }
             }
 
+            if (d->response_parser.response->method == http_method_HEAD) {
+
+                selector_status ss = SELECTOR_SUCCESS;
+                ss |= selector_set_interest_key(key, OP_NOOP);
+                ss |= selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_WRITE);
+                return ss == SELECTOR_SUCCESS ? RESPONSE : ERROR;
+
+            }
+
 
             if (d->response_parser.response->transfer_enconding_chunked) {
                 write_buffer_buffer(d->wb, b);
@@ -1094,44 +1106,28 @@ response_read(struct selector_key *key) {
             } else if (d->response_parser.response->content_length_present) {
 
 
-                if (d->response_parser.response->method == http_method_HEAD) {
-
-                    if(buffer_can_read(b)) {
-
-                        write_buffer_buffer(d->wb, b);
-
-                    }
-
+                char chunk_size[12] = {0};
+                sprintf(chunk_size, "%X\r\n", (unsigned int) n);
+                write_buffer_string(d->wb, chunk_size);
+                write_buffer_buffer(d->wb, b);
+                write_buffer_string(d->wb, "\r\n");
+                if (n >= d->response_parser.response->content_length) {
+                    // Last-chunk
+                    write_buffer_string(d->wb, "0\r\n");
+                    // Last CRLF
+                    write_buffer_string(d->wb, "\r\n");
+                    d->response_parser.response->content_length = 0;
+                } else {
+                    d->response_parser.response->content_length = d->response_parser.response->content_length - n;
                     selector_status ss = SELECTOR_SUCCESS;
                     ss |= selector_set_interest_key(key, OP_NOOP);
                     ss |= selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_WRITE);
                     return ss == SELECTOR_SUCCESS ? RESPONSE : ERROR;
-
-                } else {
-
-                    char chunk_size[12] = {0};
-                    sprintf(chunk_size, "%X\r\n", (unsigned int) n);
-                    write_buffer_string(d->wb, chunk_size);
-                    write_buffer_buffer(d->wb, b);
-                    write_buffer_string(d->wb, "\r\n");
-                    if (n >= d->response_parser.response->content_length) {
-                        // Last-chunk
-                        write_buffer_string(d->wb, "0\r\n");
-                        // Last CRLF
-                        write_buffer_string(d->wb, "\r\n");
-                        d->response_parser.response->content_length = 0;
-                    } else {
-                        d->response_parser.response->content_length = d->response_parser.response->content_length - n;
-                        selector_status ss = SELECTOR_SUCCESS;
-                        ss |= selector_set_interest_key(key, OP_NOOP);
-                        ss |= selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_WRITE);
-                        return ss == SELECTOR_SUCCESS ? RESPONSE : ERROR;
-                    }
-
                 }
 
 
             } else {
+
                 // No body
                 selector_status ss = SELECTOR_SUCCESS;
                 ss |= selector_set_interest_key(key, OP_NOOP);
@@ -1181,16 +1177,13 @@ response_write(struct selector_key *key) {
         buffer_read_adv(b, n);
 
         if (!buffer_can_read(b)) {
+
             if (d->response_parser.response->content_length == 0 && d->response_parser.response->content_length_present)
                 return DONE;
 
             if (d->response_parser.response->method == http_method_HEAD) {
 
-                selector_status ss = SELECTOR_SUCCESS;
-                ss |= selector_set_interest_key(key, OP_NOOP);
-                ss |= selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_READ);
-                ret = ss == SELECTOR_SUCCESS ? REQUEST_READ : ERROR;
-                return ret;
+                return DONE;
             }
 
             selector_status ss = SELECTOR_SUCCESS;
