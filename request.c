@@ -42,7 +42,7 @@ method(const uint8_t c, struct request_parser *p) {
         if (p->state != request_error_unsupported_method) {
             p->http_sub_parser = parser_init(parser_no_classes(), &p->d);
         } else {
-            return request_error;
+            return request_error_unsupported_method;
         }
     }
 
