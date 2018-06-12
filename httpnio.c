@@ -504,6 +504,21 @@ request_read(struct selector_key *key) {
     if (n > 0) {
         buffer_write_adv(b, n);
         int st = request_consume(b, &d->parser, &error, &d->accum);
+        if(st > request_done){
+            //Error
+            switch (st){
+                case request_error_unsupported_method: write_buffer_string(d->wb, HTTP_CODE_501);
+                    break;
+                case request_error: write_buffer_string(d->wb, HTTP_CODE_400);
+                break;
+                default: write_buffer_string(d->wb, HTTP_CODE_500);
+
+            }
+            selector_status s = 0;
+            s |= selector_set_interest(key->s, *d->client_fd, OP_WRITE);
+            ret = SELECTOR_SUCCESS == s ? REQUEST_WRITE : ERROR;
+            return ret;
+        }
         if (request_is_done(st, 0)) {
             ret = request_process(key, d);
 //            if (strlen(d->request.host) != 0) {
@@ -681,14 +696,6 @@ request_connect(struct selector_key *key, struct request_st *d) {
     bool error = false;
     // da legibilidad
     enum response_status status = d->status;
-//    if(d->status == status_general_HTTP_server_failure){
-//        //Couldn't connect
-//        write_buffer_string(d->wb, HTTP_CODE_503);
-//        selector_status s = 0;
-//        s |= selector_set_interest(key->s, *d->client_fd, OP_WRITE);
-//        int ret = SELECTOR_SUCCESS == s ? REQUEST_WRITE : ERROR;
-//        return ret;
-//    }
 
     int *fd = d->origin_fd;
     *fd = socket(ATTACHMENT(key)->origin_domain, SOCK_STREAM, 0);
@@ -720,7 +727,13 @@ request_connect(struct selector_key *key, struct request_st *d) {
             }
             ATTACHMENT(key)->references += 1;
         } else {
-//            status = errno_to_socks(errno);
+            //Couldn't connect
+            write_buffer_string(d->wb, HTTP_CODE_503);
+            selector_status s = 0;
+            s |= selector_set_interest(key->s, *d->client_fd, OP_WRITE);
+            int ret = SELECTOR_SUCCESS == s ? REQUEST_WRITE : ERROR;
+//            return ret;
+
             error = true;
             goto finally;
         }
